@@ -4,6 +4,11 @@ Aplicación web para tomar pedidos en la heladería y llevar el control de qué 
 despachó y qué falta, por mesa. La carta está transcrita de las fotos en
 [`Carta/`](Carta/).
 
+**En vivo:** https://jhiguita11.github.io/Gelato-Alla-Crema/
+
+Conviene abrirla en el celular y usar *Añadir a pantalla de inicio*: queda como
+una app y arranca a pantalla completa.
+
 ## Cómo correrla
 
 ```bash
@@ -11,6 +16,16 @@ bun install
 bun run dev      # http://localhost:5173
 bun run build    # genera dist/ listo para publicar
 ```
+
+## Cómo se publica
+
+Cada `push` a `main` dispara
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), que compila y
+publica en GitHub Pages. No hay que subir `dist/` a mano.
+
+Como el sitio vive en una subcarpeta (`/Gelato-Alla-Crema/`), `vite.config.js`
+saca la ruta base del nombre del repo que expone Actions — si el repo se
+renombra, la ruta se ajusta sola.
 
 ## Cómo funciona
 
