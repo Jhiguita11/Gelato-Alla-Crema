@@ -1,0 +1,139 @@
+@import 'tailwindcss';
+
+/**
+ * Paleta sacada del logo (Carta/Logo.jpg): turquesa de fondo, crema del
+ * lettering, marrón del contorno y naranja del barquillo.
+ *
+ * Cómo se usa cada familia:
+ *   crema     → fondos de la página y de las tarjetas
+ *   cacao     → todo el texto y las barras oscuras
+ *   menta     → la marca: acciones principales, precios, "hay"/despachado
+ *   cono      → llamados de atención: mesa, enviar el pedido
+ *   terracota → lo que se agota, se quita o se borra
+ */
+@theme {
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* El fondo va crema tibio, no blanco: así las tarjetas blancas se despegan
+     y los bordes se ven sin tener que oscurecerlos de más. */
+  --color-crema-50: #fdf6e4;
+  --color-crema-100: #f8ecd0;
+  --color-crema-200: #e9d9b2;
+  --color-crema-300: #d8c391;
+
+  --color-cacao-100: #f2e6d9;
+  --color-cacao-600: #7a4f36;
+  --color-cacao-700: #613c28;
+  --color-cacao-800: #4c2f23;
+  --color-cacao-900: #35211a;
+
+  --color-menta-100: #dcf3ed;
+  --color-menta-400: #6ecfba;
+  --color-menta-500: #45b9a0;
+  --color-menta-600: #2f9b84;
+  --color-menta-700: #237e6b;
+  --color-menta-800: #1a6153;
+
+  --color-cono-100: #fceeda;
+  --color-cono-500: #efa84e;
+  --color-cono-600: #d4862b;
+
+  --color-terracota-100: #fae4da;
+  --color-terracota-600: #b4462a;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: var(--color-crema-50);
+  color: var(--color-cacao-900);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Barra de scroll discreta para las columnas de pedidos. */
+.scroll-suave {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-crema-300) transparent;
+}
+
+/* Para las tiras que se deslizan de lado en celular (la barra de vistas). */
+.sin-barra {
+  scrollbar-width: none;
+}
+
+.sin-barra::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animar-entrada {
+  animation: aparecer 0.22s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animar-entrada {
+    animation: none;
+  }
+}
+
+/* ── Impresión: solo sale el comprobante del cierre ────────────────────────
+   Se esconde todo con visibility (no con display) para no romper el layout
+   del comprobante, y luego se vuelve a mostrar solo su rama. */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .comprobante,
+  .comprobante * {
+    visibility: visible;
+  }
+
+  .comprobante {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .no-imprimir {
+    display: none !important;
+  }
+
+  /* Que las tablas no se corten a la mitad entre páginas. */
+  .comprobante section,
+  .comprobante tr {
+    break-inside: avoid;
+  }
+}
