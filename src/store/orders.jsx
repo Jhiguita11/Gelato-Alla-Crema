@@ -6,7 +6,7 @@ const OrdersContext = createContext(null)
 
 /**
  * Pedidos que ESTE equipo marcó como listos: a quien lo marcó no hay que
- * avisarle que está listo (ver hooks/useAvisoListos.js).
+ * avisarle que está listo (ver components/AvisosPedidos.jsx).
  */
 export const marcadosAqui = new Set()
 
