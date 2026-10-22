@@ -27,7 +27,7 @@ export default function NuevoPedido({ onEnviado }) {
   const [carritoAbierto, setCarritoAbierto] = useState(false)
   const [error, setError] = useState('')
   // Pedidos que ya tiene la mesa: antes de enviar se pregunta si es la misma
-  // gente (se agrega a su pedido) o gente nueva (pedido aparte).
+  // personas (se agrega a su pedido) u otras personas (pedido aparte).
   const [preguntaMesa, setPreguntaMesa] = useState(null)
 
   const total = orderTotal({ lines: lineas })
@@ -199,7 +199,7 @@ export default function NuevoPedido({ onEnviado }) {
       </div>
 
       {preguntaMesa && (
-        <PreguntaMismaGente
+        <PreguntaMismasPersonas
           mesa={mesa}
           pedidos={preguntaMesa}
           totalNuevo={total}
@@ -451,10 +451,10 @@ export function DetalleLinea({ d, className = '' }) {
 }
 
 /**
- * La mesa ya tiene pedido: ¿es la misma gente pidiendo algo más (se agrega a
- * su cuenta) o gente nueva que se sentó (pedido aparte)?
+ * La mesa ya tiene pedido: ¿son las mismas personas pidiendo algo más (se
+ * agrega a su cuenta) u otras personas que se sentaron (pedido aparte)?
  */
-function PreguntaMismaGente({ mesa, pedidos, totalNuevo, onAgregar, onNuevo, onCancelar }) {
+function PreguntaMismasPersonas({ mesa, pedidos, totalNuevo, onAgregar, onNuevo, onCancelar }) {
   const estado = (p) =>
     p.status === 'despachado' ? 'Entregado' : p.status === 'listo' ? 'Listo para recoger' : 'En preparación'
   return (
@@ -467,10 +467,10 @@ function PreguntaMismaGente({ mesa, pedidos, totalNuevo, onAgregar, onNuevo, onC
         <div className="px-5 pb-2 pt-5">
           <p className="text-sm font-semibold uppercase tracking-wide text-cono-600">Mesa {mesa}</p>
           <h3 id="pregunta-mesa" className="mt-1 font-display text-2xl font-bold leading-tight text-cacao-900">
-            Esta mesa ya tiene pedido. ¿Es la misma gente?
+            Esta mesa ya tiene pedido. ¿Son las mismas personas?
           </h3>
           <p className="mt-2 text-sm text-cacao-800/60">
-            Si es la misma gente, lo nuevo ({formatCOP(totalNuevo)}) se suma a su cuenta y el pedido vuelve a
+            Si son las mismas personas, lo nuevo ({formatCOP(totalNuevo)}) se suma a su cuenta y el pedido vuelve a
             cocina. Lo que ya se entregó queda tachado.
           </p>
         </div>
@@ -514,7 +514,7 @@ function PreguntaMismaGente({ mesa, pedidos, totalNuevo, onAgregar, onNuevo, onC
               🧾
             </span>
             <span>
-              <span className="block text-base font-bold text-cacao-900">No, es gente nueva</span>
+              <span className="block text-base font-bold text-cacao-900">No, son otras personas</span>
               <span className="block text-xs text-cacao-800/60">Pedido aparte, con su propia cuenta</span>
             </span>
           </button>

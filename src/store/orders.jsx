@@ -53,7 +53,7 @@ export function OrdersProvider({ children }) {
   )
 
   /**
-   * La misma gente de la mesa pide algo más: lo agrega a su pedido (ver
+   * Las mismas personas de la mesa pide algo más: lo agrega a su pedido (ver
    * 'agregarAPedido' en sync/estado.js). Devuelve el pedido actualizado.
    */
   const agregarAPedido = useCallback(

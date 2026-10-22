@@ -1,8 +1,8 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- Gelato Alla Crema · la misma gente de la mesa pide algo más
+-- Gelato Alla Crema · las mismas personas de la mesa piden algo más
 --
 -- En vez de abrir otro pedido para la misma mesa, lo nuevo se agrega al que ya
--- tienen (la app pregunta antes: "¿es la misma gente o gente nueva?"):
+-- tienen (la app pregunta antes: "¿son las mismas personas?"):
 --   · Lo ya entregado queda marcado en cada línea (entregadaAt, en ms) para
 --     tacharlo en la tarjeta; lo que estaba listo sin entregar, listaAt.
 --   · El pedido vuelve a "pendiente" y a la cola con la hora de la ronda.

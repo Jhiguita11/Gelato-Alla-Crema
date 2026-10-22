@@ -130,7 +130,7 @@ describir('servidor compartido (PostgREST + migraciones)', () => {
     expect(real.pedidos.find((p) => p.id === p3.id)).toMatchObject({ anuladoPor: 'Gloria' })
   })
 
-  it('la misma gente agrega a su pedido: servidor = reducer (tachado, reabierto, cobro)', async () => {
+  it('las mismas personas agregan a su pedido: servidor = reducer (tachado, reabierto, cobro)', async () => {
     const ronda = (uid, at, extra = {}) => ({
       uid,
       productId: 'jugo',

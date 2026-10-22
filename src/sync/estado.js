@@ -77,7 +77,7 @@ export function aplicarOp(estado, op, { asignarCodigo = true } = {}) {
           : { ...p, paid: op.paid, paidAt: op.paid ? op.at : null, abonado: null },
       )
 
-    // La misma gente de la mesa pide algo más: se agrega al pedido que ya
+    // Las mismas personas de la mesa pide algo más: se agrega al pedido que ya
     // tienen en vez de abrir otro.
     //  · Lo que ya se entregó queda marcado (entregadaAt) para tacharlo; lo
     //    que estaba listo sin entregar, como lista (listaAt).

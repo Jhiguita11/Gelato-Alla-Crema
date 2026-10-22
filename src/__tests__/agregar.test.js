@@ -36,7 +36,7 @@ const agregar = (e, extra = {}) =>
   })
 const pedidoDe = (e) => e.pedidos.find((p) => p.id === 'a')
 
-describe('agregarAPedido (la misma gente pide algo más)', () => {
+describe('agregarAPedido (las mismas personas piden algo más)', () => {
   it('a un pedido entregado y pagado: tacha lo entregado, reabre y debe solo lo nuevo', () => {
     let e = conPedido()
     e = aplicarOp(e, { tipo: 'despachar', id: 'a', at: 5000 })
