@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { DetalleLinea } from './NuevoPedido'
 import { formatCOP, lineTotal } from '../data/menu'
 import { useOrders } from '../store/orders'
+import { useMotor } from '../sync/MotorProvider'
 import { describirLinea, haceCuanto, hora } from '../utils/describir'
 
 const FILTROS = [
@@ -14,8 +15,11 @@ const FILTROS = [
 ]
 
 export default function PedidosPendientes() {
-  const { orders, dispatchOrder, reopenOrder, togglePaid, removeOrder, clearDispatched } =
+  const { orders: activos, dispatchOrder, reopenOrder, togglePaid, removeOrder, clearDispatched } =
     useOrders()
+  const { rol } = useMotor()
+  // Los "limpiados" siguen contando en la caja, pero ya no estorban aquí.
+  const orders = useMemo(() => activos.filter((o) => !o.oculto), [activos])
   const [filtro, setFiltro] = useState('pendiente')
 
   // Refresca los "hace X min" sin recargar la página.
@@ -56,7 +60,9 @@ export default function PedidosPendientes() {
   return (
     <div className="mx-auto max-w-7xl px-4 pb-16 pt-6">
       {/* Indicadores */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div
+        className={`grid grid-cols-2 gap-3 ${rol === 'admin' ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}
+      >
         <Indicador valor={pendientes.length} etiqueta="Pendientes" acento="cono" />
         <Indicador valor={despachados.length} etiqueta="Despachados" acento="menta" />
         <Indicador
@@ -64,7 +70,11 @@ export default function PedidosPendientes() {
           etiqueta="Sin pagar"
           acento="cacao"
         />
-        <Indicador valor={formatCOP(porCobrar)} etiqueta="Por cobrar" pequeno />
+        {/* El monto total es una cifra del día: solo para el admin. Cada pedido
+            sí muestra su precio, que hace falta para cobrarlo. */}
+        {rol === 'admin' && (
+          <Indicador valor={formatCOP(porCobrar)} etiqueta="Por cobrar" pequeno />
+        )}
       </div>
 
       {/* Filtros */}
@@ -102,7 +112,12 @@ export default function PedidosPendientes() {
           <button
             type="button"
             onClick={() => {
-              if (confirm(`¿Borrar ${cerrados.length} pedidos ya despachados y pagados?`)) {
+              if (
+                confirm(
+                  `¿Quitar de la lista ${cerrados.length} pedidos ya despachados y pagados?\n\n` +
+                    'Siguen contando en la caja del día.',
+                )
+              ) {
                 clearDispatched()
               }
             }}
@@ -142,7 +157,14 @@ export default function PedidosPendientes() {
               onReabrir={() => reopenOrder(pedido.id)}
               onTogglePago={() => togglePaid(pedido.id)}
               onEliminar={() => {
-                if (confirm(`¿Eliminar el pedido #${pedido.code}?`)) removeOrder(pedido.id)
+                const nombre = pedido.code ? `#${pedido.code}` : 'sin número'
+                if (
+                  confirm(
+                    `¿Anular el pedido ${nombre}?\n\n` +
+                      'No contará en la caja. Queda registrado para el administrador.',
+                  )
+                )
+                  removeOrder(pedido.id)
               }}
             />
           ))}
@@ -190,7 +212,14 @@ function TarjetaPedido({ pedido, onDespachar, onReabrir, onTogglePago, onElimina
         }`}
       >
         <div className="flex flex-wrap items-baseline gap-2">
-          <span className="font-display text-lg font-bold">#{pedido.code}</span>
+          {pedido.code ? (
+            <span className="font-display text-lg font-bold">#{pedido.code}</span>
+          ) : (
+            // Tomado sin internet: el número lo pone el servidor al subirlo.
+            <span className="font-display text-lg font-bold opacity-70" title="Por enviar">
+              #···
+            </span>
+          )}
           <span
             className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold ${
               despachado ? 'bg-crema-200 text-cacao-900' : 'bg-cono-500 text-white'
@@ -295,7 +324,7 @@ function TarjetaPedido({ pedido, onDespachar, onReabrir, onTogglePago, onElimina
             <button
               type="button"
               onClick={onEliminar}
-              aria-label={`Eliminar pedido ${pedido.code}`}
+              aria-label={`Eliminar pedido ${pedido.code ?? 'sin número'}`}
               className="rounded-xl border-2 border-crema-200 px-3 py-2.5 text-xs font-semibold text-terracota-600 transition hover:border-cono-500"
             >
               ✕

@@ -1,125 +1,112 @@
 import { createContext, useCallback, useContext, useMemo } from 'react'
 import { orderTotal } from '../data/menu'
-import { fusionarCierres } from '../utils/respaldo'
-import { leer, escribir, useAlmacen } from './almacen'
-
-const STORAGE_KEY = 'gac.orders.v1'
-const COUNTER_KEY = 'gac.counter.v1'
-const CIERRES_KEY = 'gac.cierres.v1'
+import { useMotor } from '../sync/MotorProvider'
 
 const OrdersContext = createContext(null)
 
-function readCounter() {
-  const raw = Number(leer(COUNTER_KEY, 0))
-  return Number.isFinite(raw) && raw > 0 ? raw : 0
-}
-
+/**
+ * Pedidos de la jornada e historial de cierres. Los datos y dónde se guardan
+ * (este navegador o el servidor compartido) los maneja el motor: aquí solo se
+ * traduce cada acción de la pantalla a una operación (ver sync/estado.js).
+ */
 export function OrdersProvider({ children }) {
-  // Pedidos y cierres se comparten entre pestañas: la caja toma el pedido y la
-  // pantalla de cocina (otra pestaña del mismo equipo) se actualiza sola.
-  // Cada cambio parte de lo último guardado; ver store/almacen.js.
-  const [orders, actualizarOrders] = useAlmacen(STORAGE_KEY, [])
-  const [cierres, actualizarCierres] = useAlmacen(CIERRES_KEY, [])
+  const { estado, ejecutar, turnoActivo } = useMotor()
+  // `todos` incluye los anulados (para que el resumen los reporte aparte);
+  // `orders`, lo que existe para trabajar: sin anulados. Los "limpiados"
+  // (ocultos) siguen aquí porque cuentan en la caja; la lista los filtra.
+  const todos = estado.pedidos
+  const orders = useMemo(() => todos.filter((o) => !o.anuladoAt), [todos])
+  const cierres = estado.cierres
 
   const addOrder = useCallback(
     ({ table, lines, note, customer, takenBy, paid = false }) => {
-      let order
-      actualizarOrders((prev) => {
-        // El consecutivo se toma en el mismo paso en que se guarda el pedido.
-        const next = readCounter() + 1
-        escribir(COUNTER_KEY, next)
-        const ahora = Date.now()
-        order = {
-          id: crypto.randomUUID(),
-          code: String(next).padStart(3, '0'),
-          table,
-          customer: customer?.trim() || '',
-          takenBy: takenBy ?? null,
-          note: note?.trim() || '',
-          lines,
-          status: 'pendiente',
-          paid,
-          createdAt: ahora,
-          dispatchedAt: null,
-          paidAt: paid ? ahora : null,
-          total: orderTotal({ lines }),
-        }
-        return [order, ...prev]
-      })
-      return order
+      const ahora = Date.now()
+      const pedido = {
+        id: crypto.randomUUID(),
+        table,
+        customer: customer?.trim() || '',
+        takenBy: takenBy ?? null,
+        note: note?.trim() || '',
+        lines,
+        status: 'pendiente',
+        paid,
+        createdAt: ahora,
+        dispatchedAt: null,
+        paidAt: paid ? ahora : null,
+        total: orderTotal({ lines }),
+      }
+      const despues = ejecutar({ tipo: 'crearPedido', pedido })
+      // En modo local ya trae su número; en el compartido lo pone el servidor
+      // y mientras tanto viene con code: null.
+      return despues.pedidos.find((p) => p.id === pedido.id) ?? { ...pedido, code: null }
     },
-    [actualizarOrders],
-  )
-
-  /** Cambia un pedido por id, sobre la versión guardada más reciente. */
-  const cambiar = useCallback(
-    (id, fn) =>
-      actualizarOrders((prev) =>
-        prev.some((o) => o.id === id) ? prev.map((o) => (o.id === id ? fn(o) : o)) : prev,
-      ),
-    [actualizarOrders],
+    [ejecutar],
   )
 
   /** Alterna entre pagado y pendiente de pago. */
   const togglePaid = useCallback(
-    (id) => cambiar(id, (o) => ({ ...o, paid: !o.paid, paidAt: o.paid ? null : Date.now() })),
-    [cambiar],
+    (id) => {
+      const pedido = orders.find((o) => o.id === id)
+      if (pedido) ejecutar({ tipo: 'marcarPago', id, paid: !pedido.paid, at: Date.now() })
+    },
+    [orders, ejecutar],
   )
 
   const dispatchOrder = useCallback(
-    (id) => cambiar(id, (o) => ({ ...o, status: 'despachado', dispatchedAt: Date.now() })),
-    [cambiar],
+    (id) => ejecutar({ tipo: 'despachar', id, at: Date.now() }),
+    [ejecutar],
   )
 
-  const reopenOrder = useCallback(
-    (id) => cambiar(id, (o) => ({ ...o, status: 'pendiente', dispatchedAt: null })),
-    [cambiar],
-  )
+  const reopenOrder = useCallback((id) => ejecutar({ tipo: 'reabrir', id }), [ejecutar])
 
+  /** Anula el pedido: deja de contar, pero queda registro de quién y cuándo. */
   const removeOrder = useCallback(
-    (id) => actualizarOrders((prev) => prev.filter((o) => o.id !== id)),
-    [actualizarOrders],
+    (id) => ejecutar({ tipo: 'borrarPedido', id, at: Date.now(), por: turnoActivo?.persona ?? null }),
+    [ejecutar, turnoActivo],
   )
 
   /**
-   * Limpia los despachados, pero solo los que ya están pagados: un pedido
-   * entregado que todavía debe no se puede perder de la vista.
+   * Quita de la lista los despachados que ya están pagados (siguen contando en
+   * la caja). Un pedido entregado que todavía debe no se puede perder de vista.
    */
-  const clearDispatched = useCallback(
-    () => actualizarOrders((prev) => prev.filter((o) => !(o.status === 'despachado' && o.paid))),
-    [actualizarOrders],
-  )
+  const clearDispatched = useCallback(() => ejecutar({ tipo: 'limpiarDespachados' }), [ejecutar])
 
   /**
    * Cierra la caja: guarda el resumen del día en el historial, borra los
-   * pedidos de la jornada y vuelve la numeración a #001.
-   * El resumen se calcula afuera (`resumenDelDia`) y llega ya hecho.
+   * pedidos de la jornada, vuelve la numeración a #001 y reinicia los turnos
+   * de quien siga conectado. El resumen llega hecho (`resumenDelDia`).
    */
   const cerrarCaja = useCallback(
     (resumen) => {
+      const ahora = Date.now()
       const cierre = {
         id: crypto.randomUUID(),
-        cerradoAt: Date.now(),
+        cerradoAt: ahora,
         abiertoAt: resumen.desde,
         ...resumen,
       }
-      actualizarCierres((prev) => [cierre, ...prev])
-      actualizarOrders(() => [])
-      escribir(COUNTER_KEY, 0)
+      ejecutar({
+        tipo: 'cerrarCaja',
+        jornadaId: estado.jornada.id,
+        nuevaJornadaId: crypto.randomUUID(),
+        cierre,
+        at: ahora,
+      })
       return cierre
     },
-    [actualizarCierres, actualizarOrders],
+    [ejecutar, estado.jornada.id],
   )
 
   /** Agrega cierres de un respaldo sin duplicar los que ya están. */
   const importarCierres = useCallback(
-    (importados) => actualizarCierres((prev) => fusionarCierres(prev, importados)),
-    [actualizarCierres],
+    (importados) => ejecutar({ tipo: 'importarCierres', cierres: importados }),
+    [ejecutar],
   )
 
   const value = useMemo(
     () => ({
       orders,
+      todos,
       cierres,
       cerrarCaja,
       importarCierres,
@@ -132,6 +119,7 @@ export function OrdersProvider({ children }) {
     }),
     [
       orders,
+      todos,
       cierres,
       cerrarCaja,
       importarCierres,

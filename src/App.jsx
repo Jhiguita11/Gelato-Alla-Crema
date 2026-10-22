@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import AperturaDia from './components/AperturaDia'
 import Entrada from './components/Entrada'
+import EstadoSync, { AvisoSync } from './components/EstadoSync'
 import Caja from './views/Caja'
 import Disponibilidad from './views/Disponibilidad'
 import NuevoPedido from './views/NuevoPedido'
@@ -85,6 +86,8 @@ export default function App() {
             </BotonVista>
           </nav>
 
+          <EstadoSync />
+
           {/* Turno abierto. En celular solo van las iniciales y "Salir". */}
           {persona && (
             <div className="flex shrink-0 items-center gap-2 rounded-full bg-white px-2 py-1.5 shadow-sm ring-1 ring-crema-200">
@@ -116,7 +119,11 @@ export default function App() {
         {vista === 'nuevo' && (
           <NuevoPedido
             onEnviado={(pedido) =>
-              setAviso(`Pedido #${pedido.code} enviado · Mesa ${pedido.table}`)
+              setAviso(
+                pedido.code
+                  ? `Pedido #${pedido.code} enviado · Mesa ${pedido.table}`
+                  : `Pedido enviado · Mesa ${pedido.table}`,
+              )
             }
           />
         )}
@@ -124,6 +131,8 @@ export default function App() {
         {vista === 'disponibilidad' && <Disponibilidad />}
         {vista === 'caja' && <Caja />}
       </main>
+
+      <AvisoSync />
 
       {/* Primero quién entra, y solo después qué sabores hay. */}
       {!persona && <Entrada />}

@@ -1,10 +1,7 @@
 import { createContext, useCallback, useContext, useMemo } from 'react'
 import { FLAVORS, PRODUCTS } from '../data/menu'
-import { leer, useAlmacen } from './almacen'
-
-const STORAGE_KEY = 'gac.disponibilidad.v1'
-// Los sabores nuevos se guardan aparte del día: llegaron para quedarse.
-const EXTRA_KEY = 'gac.sabores-extra.v1'
+import { useMotor } from '../sync/MotorProvider'
+import { fijarCatalogo } from '../utils/catalogo'
 
 const DisponibilidadContext = createContext(null)
 
@@ -12,7 +9,7 @@ const DisponibilidadContext = createContext(null)
 function aSlug(texto) {
   return texto
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
@@ -27,61 +24,37 @@ function hoy() {
   return `${d.getFullYear()}-${mes}-${dia}`
 }
 
-/**
- * Catálogo completo de sabores sin pasar por React. Lo usa `describir.js`
- * para poder ponerle nombre a un sabor agregado desde la app cuando muestra
- * un pedido viejo.
- */
-export function catalogoSabores() {
-  return [...FLAVORS, ...(leer(EXTRA_KEY, []) ?? [])]
-}
-
 export function DisponibilidadProvider({ children }) {
-  // Si la caja y la cocina están en pestañas distintas del mismo equipo, se
-  // enteran solas cuando alguien agota un sabor (ver store/almacen.js).
-  const [estado, setEstado] = useAlmacen(STORAGE_KEY, null)
-  const [extra, setExtra] = useAlmacen(EXTRA_KEY, [])
+  const { estado, ejecutar } = useMotor()
+  const { vitrina } = estado
 
   /** Los 16 de la casa más los que se hayan agregado desde la app. */
-  const catalogo = useMemo(() => [...FLAVORS, ...(extra ?? [])], [extra])
+  const catalogo = useMemo(() => [...FLAVORS, ...vitrina.saboresExtra], [vitrina.saboresExtra])
+  fijarCatalogo(catalogo)
 
-  // Se vuelve a preguntar cuando cambia el día.
-  const necesitaApertura = !estado || estado.fecha !== hoy()
+  // Se vuelve a preguntar cuando cambia el día. En modo compartido, el primero
+  // que abre el día lo abre para todos los celulares.
+  const necesitaApertura = !vitrina.fecha || vitrina.fecha !== hoy()
 
   /** Arranca el día con los sabores que haya en la vitrina. */
   const abrirDia = useCallback(
-    (saboresIds) => setEstado(() => ({ fecha: hoy(), sabores: saboresIds, productosAgotados: [] })),
-    [setEstado],
+    (saboresIds) => ejecutar({ tipo: 'abrirDia', fecha: hoy(), sabores: saboresIds }),
+    [ejecutar],
   )
 
-  const toggleSabor = useCallback((id) => {
-    setEstado((prev) => {
-      if (!prev) return prev
-      const activo = prev.sabores.includes(id)
-      return {
-        ...prev,
-        sabores: activo ? prev.sabores.filter((s) => s !== id) : [...prev.sabores, id],
-      }
-    })
-  }, [setEstado])
+  const toggleSabor = useCallback(
+    (id) => ejecutar({ tipo: 'marcarSabor', id, activo: !vitrina.sabores.includes(id) }),
+    [ejecutar, vitrina.sabores],
+  )
 
-  const toggleProducto = useCallback((id) => {
-    setEstado((prev) => {
-      if (!prev) return prev
-      const agotados = prev.productosAgotados ?? []
-      return {
-        ...prev,
-        productosAgotados: agotados.includes(id)
-          ? agotados.filter((p) => p !== id)
-          : [...agotados, id],
-      }
-    })
-  }, [setEstado])
+  const toggleProducto = useCallback(
+    (id) =>
+      ejecutar({ tipo: 'marcarProducto', id, agotado: !vitrina.productosAgotados.includes(id) }),
+    [ejecutar, vitrina.productosAgotados],
+  )
 
   /** Fuerza volver a preguntar los sabores sin esperar al otro día. */
-  // Borra la apertura guardada: antes solo se borraba en memoria y, al recargar,
-  // volvía la del día sin preguntar.
-  const reabrirDia = useCallback(() => setEstado(() => null), [setEstado])
+  const reabrirDia = useCallback(() => ejecutar({ tipo: 'reabrirDia' }), [ejecutar])
 
   /**
    * Registra un sabor que llegó nuevo. Queda en el catálogo para siempre y
@@ -95,44 +68,33 @@ export function DisponibilidadProvider({ children }) {
 
       const id = aSlug(nombre)
       if (!id) return 'Ese nombre no sirve, prueba con otro.'
+      if (catalogo.some((f) => f.id === id)) return `"${nombre}" ya está en la lista.`
 
-      let error = null
-      setExtra((prev) => {
-        const lista = prev ?? []
-        if ([...FLAVORS, ...lista].some((f) => f.id === id)) {
-          error = `"${nombre}" ya está en la lista.`
-          return prev
-        }
-        return [...lista, { id, name: nombre, color }]
-      })
-      if (error) return error
-      setEstado((prev) => (prev ? { ...prev, sabores: [...prev.sabores, id] } : prev))
+      ejecutar({ tipo: 'agregarSaborExtra', sabor: { id, name: nombre, color } })
       return null
     },
-    [setExtra, setEstado],
+    [ejecutar, catalogo],
   )
 
   /** Solo se pueden borrar los agregados desde la app; los de la casa se apagan. */
   const eliminarSabor = useCallback(
-    (id) => {
-      setExtra((prev) => (prev ?? []).filter((f) => f.id !== id))
-      setEstado((prev) =>
-        prev ? { ...prev, sabores: prev.sabores.filter((s) => s !== id) } : prev,
-      )
-    },
-    [setExtra, setEstado],
+    (id) => ejecutar({ tipo: 'eliminarSaborExtra', id }),
+    [ejecutar],
   )
 
-  const esPersonalizado = useCallback((id) => (extra ?? []).some((f) => f.id === id), [extra])
+  const esPersonalizado = useCallback(
+    (id) => vitrina.saboresExtra.some((f) => f.id === id),
+    [vitrina.saboresExtra],
+  )
 
   const saboresActivos = useMemo(() => {
-    if (!estado) return []
-    return catalogo.filter((f) => estado.sabores.includes(f.id))
-  }, [estado, catalogo])
+    if (!vitrina.fecha) return []
+    return catalogo.filter((f) => vitrina.sabores.includes(f.id))
+  }, [vitrina.fecha, vitrina.sabores, catalogo])
 
   const productoAgotado = useCallback(
-    (id) => (estado?.productosAgotados ?? []).includes(id),
-    [estado],
+    (id) => vitrina.productosAgotados.includes(id),
+    [vitrina.productosAgotados],
   )
 
   const productosDisponibles = useMemo(
@@ -143,7 +105,7 @@ export function DisponibilidadProvider({ children }) {
   const value = useMemo(
     () => ({
       necesitaApertura,
-      fecha: estado?.fecha ?? null,
+      fecha: vitrina.fecha,
       catalogo,
       saboresActivos,
       productosDisponibles,
@@ -158,7 +120,7 @@ export function DisponibilidadProvider({ children }) {
     }),
     [
       necesitaApertura,
-      estado,
+      vitrina.fecha,
       catalogo,
       saboresActivos,
       productosDisponibles,

@@ -30,6 +30,9 @@ jobs:
       # Si un test falla no se publica: la app en vivo sigue con la versión anterior.
       - run: bun run test
 
+      # El modo (local o compartido) sale de .env.production. No pasar aquí
+      # VITE_SUPABASE_* vacías: una variable de entorno, aunque esté vacía,
+      # le gana al archivo y la app saldría en modo local.
       - run: bun run build
 
       - uses: actions/configure-pages@v5

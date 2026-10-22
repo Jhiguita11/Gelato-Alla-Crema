@@ -1,5 +1,5 @@
 import { ADICIONES_EXTRA, PRODUCTS, lineTotal, varianteDe } from '../data/menu'
-import { catalogoSabores } from '../store/disponibilidad'
+import { catalogoSabores } from './catalogo'
 
 /**
  * Sabores de UNA unidad de la línea: los del producto más los de las
@@ -32,8 +32,12 @@ export function porcionesDeLinea(line) {
  * Resume todo lo que se ha hecho en el día a partir de los pedidos abiertos.
  * Es una función pura: la usa tanto la pantalla de Caja como el cierre.
  */
-export function resumenDelDia(orders, turnos = []) {
+export function resumenDelDia(todos, turnos = []) {
   const sabores = catalogoSabores()
+  // Los anulados no cuentan para nada, pero se reportan aparte. Los ocultos
+  // ("limpiados" de la lista) sí cuentan: son ventas.
+  const orders = todos.filter((o) => !o.anuladoAt)
+  const anulados = todos.filter((o) => o.anuladoAt)
 
   // Cuánto estuvo conectado cada quien, sumando todos sus turnos del día.
   const minutosPorPersona = new Map()
@@ -110,6 +114,8 @@ export function resumenDelDia(orders, turnos = []) {
     total,
     cobrado,
     porCobrar: total - cobrado,
+    anulados: anulados.length,
+    totalAnulado: anulados.reduce((s, o) => s + o.total, 0),
     pendientes: orders.filter((o) => o.status === 'pendiente').length,
     sinPagar: orders.filter((o) => !o.paid).length,
     // A igual número de unidades manda lo que más plata dejó, para que el

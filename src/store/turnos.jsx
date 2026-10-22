@@ -1,57 +1,43 @@
 import { createContext, useCallback, useContext, useMemo } from 'react'
-import { useAlmacen } from './almacen'
-
-const STORAGE_KEY = 'gac.turnos.v1'
-const VACIO = { activo: null, turnos: [] }
+import { useMotor } from '../sync/MotorProvider'
 
 const TurnosContext = createContext(null)
 
 /**
  * Quién está atendiendo y desde cuándo. Cada entrada abre un turno y cada
  * salida lo cierra, así queda registrado cuánto estuvo conectado cada quien.
+ *
+ * La lista de turnos es de todo el local; quién está conectado es de cada
+ * celular (cada mesero entra con su nombre en su teléfono).
  */
 export function TurnosProvider({ children }) {
-  const [estado, actualizar] = useAlmacen(STORAGE_KEY, VACIO)
+  const { estado, turnoActivo, ejecutar } = useMotor()
 
   const entrar = useCallback(
-    (persona) => {
-      const turno = { id: crypto.randomUUID(), persona, inicio: Date.now(), fin: null }
-      actualizar((prev) => ({ activo: turno, turnos: [...(prev?.turnos ?? []), turno] }))
-    },
-    [actualizar],
+    (persona) =>
+      ejecutar({
+        tipo: 'entrar',
+        turno: { id: crypto.randomUUID(), persona, inicio: Date.now(), fin: null },
+      }),
+    [ejecutar],
   )
 
   const salir = useCallback(() => {
-    actualizar((prev) => {
-      if (!prev?.activo) return prev
-      const fin = Date.now()
-      return {
-        activo: null,
-        turnos: prev.turnos.map((t) => (t.id === prev.activo.id ? { ...t, fin } : t)),
-      }
-    })
-  }, [actualizar])
+    if (turnoActivo) ejecutar({ tipo: 'salir', id: turnoActivo.id, fin: Date.now() })
+  }, [turnoActivo, ejecutar])
 
-  /** Al cerrar la caja se archiva el día: los turnos arrancan de cero. */
-  const reiniciarTurnos = useCallback(() => {
-    actualizar((prev) => {
-      if (!prev?.activo) return { activo: null, turnos: [] }
-      // Quien esté conectado sigue conectado, pero con el turno recién abierto.
-      const turno = { ...prev.activo, inicio: Date.now(), fin: null }
-      return { activo: turno, turnos: [turno] }
-    })
-  }, [actualizar])
+  // Si se cerró la caja, el turno sigue pero con la hora del día nuevo.
+  const enLista = estado.turnos.find((t) => t.id === turnoActivo?.id)
 
   const value = useMemo(
     () => ({
-      persona: estado?.activo?.persona ?? null,
-      desde: estado?.activo?.inicio ?? null,
-      turnos: estado?.turnos ?? [],
+      persona: turnoActivo?.persona ?? null,
+      desde: enLista?.inicio ?? turnoActivo?.inicio ?? null,
+      turnos: estado.turnos,
       entrar,
       salir,
-      reiniciarTurnos,
     }),
-    [estado, entrar, salir, reiniciarTurnos],
+    [turnoActivo, enLista, estado.turnos, entrar, salir],
   )
 
   return <TurnosContext.Provider value={value}>{children}</TurnosContext.Provider>
