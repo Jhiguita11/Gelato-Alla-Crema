@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import AperturaDia from './components/AperturaDia'
 import Entrada from './components/Entrada'
+import { AvisosListos, BarraActivarAvisos } from './components/AvisosPedidos'
 import EstadoSync, { AvisoSync } from './components/EstadoSync'
 import Caja from './views/Caja'
 import Disponibilidad from './views/Disponibilidad'
@@ -19,7 +20,8 @@ export default function App() {
   const [vista, setVista] = useState('nuevo')
   const [aviso, setAviso] = useState(null)
 
-  const pendientes = orders.filter((o) => o.status === 'pendiente').length
+  // Sin entregar: en preparación o listos para recoger.
+  const pendientes = orders.filter((o) => !o.oculto && o.status !== 'despachado').length
   const agotados = catalogo.length - saboresActivos.length
 
   useEffect(() => {
@@ -115,6 +117,8 @@ export default function App() {
         </div>
       </header>
 
+      <BarraActivarAvisos />
+
       <main>
         {vista === 'nuevo' && (
           <NuevoPedido
@@ -133,6 +137,7 @@ export default function App() {
       </main>
 
       <AvisoSync />
+      <AvisosListos />
 
       {/* Primero quién entra, y solo después qué sabores hay. */}
       {!persona && <Entrada />}

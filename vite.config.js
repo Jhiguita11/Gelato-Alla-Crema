@@ -59,6 +59,8 @@ export default defineConfig({
           '**/*-latin-{wght,opsz}-normal-*.woff2',
           '**/*-latin-ext-{wght,opsz}-normal-*.woff2',
         ],
+        // Al tocar la notificación de "pedido listo", abrir o traer la app.
+        importScripts: ['sw-avisos.js'],
         // Cualquier ruta abre la app, también sin conexión.
         navigateFallback: `${base}index.html`,
         cleanupOutdatedCaches: true,

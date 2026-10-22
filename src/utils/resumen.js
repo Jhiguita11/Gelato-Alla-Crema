@@ -116,7 +116,8 @@ export function resumenDelDia(todos, turnos = []) {
     porCobrar: total - cobrado,
     anulados: anulados.length,
     totalAnulado: anulados.reduce((s, o) => s + o.total, 0),
-    pendientes: orders.filter((o) => o.status === 'pendiente').length,
+    // Sin entregar: en preparación o listos para recoger.
+    pendientes: orders.filter((o) => o.status !== 'despachado').length,
     sinPagar: orders.filter((o) => !o.paid).length,
     // A igual número de unidades manda lo que más plata dejó, para que el
     // orden no quede al azar al principio del día.

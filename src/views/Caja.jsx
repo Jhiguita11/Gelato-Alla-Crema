@@ -38,7 +38,7 @@ export default function Caja() {
 function confirmarCierre(r, { conMontos }) {
   if (r.pendientes > 0) {
     const sigue = confirm(
-      `Todavía hay ${r.pendientes} ${r.pendientes === 1 ? 'pedido' : 'pedidos'} sin despachar.\n\n` +
+      `Todavía hay ${r.pendientes} ${r.pendientes === 1 ? 'pedido' : 'pedidos'} sin entregar.\n\n` +
         '¿Cerrar la caja de todas formas?',
     )
     if (!sigue) return false
@@ -105,7 +105,7 @@ function CajaPersonal() {
 
       <section className="mt-6 grid grid-cols-3 gap-3">
         <Dato valor={r.pedidos} etiqueta={r.pedidos === 1 ? 'Pedido' : 'Pedidos'} />
-        <Dato valor={r.pendientes} etiqueta="Sin despachar" acento="cacao" />
+        <Dato valor={r.pendientes} etiqueta="Sin entregar" acento="cacao" />
         <Dato valor={r.sinPagar} etiqueta="Sin cobrar" acento="cacao" />
       </section>
 

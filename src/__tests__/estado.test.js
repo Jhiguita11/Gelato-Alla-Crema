@@ -57,6 +57,22 @@ describe('operaciones sobre pedidos', () => {
     })
   })
 
+  it('flujo completo: en preparación → listo → entregado', () => {
+    const l = aplicarOp(base, { tipo: 'marcarListo', id: 'a', at: 10 })
+    expect(l.pedidos[0]).toMatchObject({ status: 'listo', listoAt: 10 })
+    expect(aplicarOp(l, { tipo: 'marcarListo', id: 'a', at: 20 })).toBe(l)
+    const e = aplicarOp(l, { tipo: 'despachar', id: 'a', at: 30 })
+    expect(e.pedidos[0]).toMatchObject({ status: 'despachado', listoAt: 10, dispatchedAt: 30 })
+    // Si otro celular ya lo entregó, "listo" no lo devuelve atrás.
+    expect(aplicarOp(e, { tipo: 'marcarListo', id: 'a', at: 40 })).toBe(e)
+    // Volver a preparación limpia los tiempos.
+    expect(aplicarOp(l, { tipo: 'reabrir', id: 'a' }).pedidos[0]).toMatchObject({
+      status: 'pendiente',
+      listoAt: null,
+      dispatchedAt: null,
+    })
+  })
+
   it('despachar y reabrir', () => {
     const d = aplicarOp(base, { tipo: 'despachar', id: 'a', at: 7 })
     expect(d.pedidos[0]).toMatchObject({ status: 'despachado', dispatchedAt: 7 })

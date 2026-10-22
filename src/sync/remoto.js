@@ -25,6 +25,7 @@ export function filaAPedido(r) {
     total: r.total,
     createdAt: ms(r.creado_at),
     dispatchedAt: ms(r.despachado_at),
+    listoAt: ms(r.listo_at),
     paidAt: ms(r.pagado_at),
     oculto: r.oculto ?? false,
     anuladoAt: ms(r.anulado_at),
@@ -167,13 +168,25 @@ export async function ejecutarRemoto(cliente, op) {
           .eq('id', op.id),
       )
       return null
+    case 'marcarListo':
+      // Solo si sigue en preparación (igual que el reducer): si otro celular ya
+      // lo entregó, no lo devuelve a "listo".
+      await hecho(
+        pedidos()
+          .update({ estado: 'listo', listo_at: iso(op.at) })
+          .eq('id', op.id)
+          .eq('estado', 'pendiente'),
+      )
+      return null
     case 'despachar':
       await hecho(
         pedidos().update({ estado: 'despachado', despachado_at: iso(op.at) }).eq('id', op.id),
       )
       return null
     case 'reabrir':
-      await hecho(pedidos().update({ estado: 'pendiente', despachado_at: null }).eq('id', op.id))
+      await hecho(
+        pedidos().update({ estado: 'pendiente', despachado_at: null, listo_at: null }).eq('id', op.id),
+      )
       return null
     case 'borrarPedido':
       // Anular, no borrar: queda registro para el admin.

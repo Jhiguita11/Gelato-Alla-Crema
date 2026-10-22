@@ -88,6 +88,16 @@ describe('resumenDelDia', () => {
     expect(r.totalAnulado).toBe(7000)
   })
 
+  it('"sin entregar" cuenta los en preparación y los listos', () => {
+    const uno = { productId: 'brownie', quantity: 1 }
+    const r = resumenDelDia([
+      pedido([uno], { status: 'pendiente' }),
+      pedido([uno], { status: 'listo' }),
+      pedido([uno], { status: 'despachado' }),
+    ])
+    expect(r.pendientes).toBe(2)
+  })
+
   it('un día sin pedidos queda en cero', () => {
     const r = resumenDelDia([])
     expect(r).toMatchObject({ pedidos: 0, total: 0, porcionesTotales: 0, desde: null })
