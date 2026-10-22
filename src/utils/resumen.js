@@ -1,11 +1,31 @@
-import { PRODUCTS, lineTotal, varianteDe } from '../data/menu'
+import { ADICIONES_EXTRA, PRODUCTS, lineTotal, varianteDe } from '../data/menu'
 import { catalogoSabores } from '../store/disponibilidad'
 
+/**
+ * Sabores de UNA unidad de la línea: los del producto más los de las
+ * adiciones que llevan sabor (la porción extra de helado). La porción extra
+ * guarda su sabor aparte, en `adicionSabores`, así que hay que sumarla aquí o
+ * se pierde de la cuenta de qué reponer.
+ *
+ * Solo cuenta el sabor de una adición si la adición sigue marcada: si alguien
+ * la quitó después de elegirle sabor, `adicionSabores` puede conservarlo.
+ */
+export function saboresDeLinea(line) {
+  const extras = ADICIONES_EXTRA.filter((a) => a.pideSabor)
+    .filter((a) => (line.adicionIds ?? []).includes(a.id))
+    .map((a) => line.adicionSabores?.[a.id])
+    .filter(Boolean)
+  return [...(line.flavorIds ?? []), ...extras]
+}
+
 /** Cuántas porciones de helado lleva una línea, contando las unidades. */
-function porcionesDeLinea(line) {
+export function porcionesDeLinea(line) {
   const product = PRODUCTS.find((p) => p.id === line.productId)
-  const porciones = varianteDe(product, line.varianteId)?.porciones ?? product?.porciones ?? 0
-  return porciones * (line.quantity ?? 1)
+  const base = varianteDe(product, line.varianteId)?.porciones ?? product?.porciones ?? 0
+  const extras = ADICIONES_EXTRA.filter(
+    (a) => a.pideSabor && (line.adicionIds ?? []).includes(a.id),
+  ).length
+  return (base + extras) * (line.quantity ?? 1)
 }
 
 /**
@@ -69,7 +89,7 @@ export function resumenDelDia(orders, turnos = []) {
 
       porcionesTotales += porcionesDeLinea(linea)
 
-      for (const saborId of linea.flavorIds ?? []) {
+      for (const saborId of saboresDeLinea(linea)) {
         const sabor = sabores.find((s) => s.id === saborId)
         const previo = porSabor.get(saborId) ?? {
           id: saborId,

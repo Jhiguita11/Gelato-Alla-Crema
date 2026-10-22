@@ -1,17 +1,25 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import ComprobanteCierre from '../components/ComprobanteCierre'
 import { formatCOP } from '../data/menu'
 import { useOrders } from '../store/orders'
 import { useTurnos } from '../store/turnos'
 import { duracion, fechaLarga, resumenDelDia } from '../utils/resumen'
 import { hora } from '../utils/describir'
+import {
+  cierresACSV,
+  contarNuevos,
+  crearRespaldo,
+  descargar,
+  leerRespaldo,
+  nombreArchivo,
+} from '../utils/respaldo'
 
 /**
  * Cuenta del día: lo vendido desde que se abrió hasta que se cierra la caja.
  * Al cerrar, el resumen pasa al historial y la numeración vuelve a #001.
  */
 export default function Caja() {
-  const { orders, cierres, cerrarCaja } = useOrders()
+  const { orders, cierres, cerrarCaja, importarCierres } = useOrders()
   const { turnos, reiniciarTurnos } = useTurnos()
   const [ultimoCierre, setUltimoCierre] = useState(null)
   // Cierre que se está viendo como documento imprimible.
@@ -186,6 +194,8 @@ export default function Caja() {
 
       {cierres.length > 0 && <Historial cierres={cierres} onVerDocumento={setComprobante} />}
 
+      <Respaldo cierres={cierres} onImportar={importarCierres} />
+
       {comprobante && (
         <ComprobanteCierre cierre={comprobante} onCerrar={() => setComprobante(null)} />
       )}
@@ -331,6 +341,90 @@ function Historial({ cierres, onVerDocumento }) {
           )
         })}
       </ul>
+    </section>
+  )
+}
+
+/**
+ * Copia de seguridad del historial. El historial solo existe en este
+ * navegador: si se borran los datos o se cambia de celular, se pierde.
+ */
+function Respaldo({ cierres, onImportar }) {
+  const entrada = useRef(null)
+  const [mensaje, setMensaje] = useState(null)
+  const hayCierres = cierres.length > 0
+
+  function exportarJSON() {
+    descargar(
+      JSON.stringify(crearRespaldo(cierres), null, 2),
+      nombreArchivo('json'),
+      'application/json',
+    )
+  }
+
+  function exportarCSV() {
+    descargar(cierresACSV(cierres), nombreArchivo('csv'), 'text/csv;charset=utf-8')
+  }
+
+  async function importar(event) {
+    const archivo = event.target.files?.[0]
+    event.target.value = '' // permite volver a elegir el mismo archivo
+    if (!archivo) return
+    try {
+      const importados = leerRespaldo(await archivo.text())
+      const nuevos = contarNuevos(cierres, importados)
+      if (nuevos === 0) {
+        setMensaje({ ok: true, texto: 'Ese respaldo ya estaba cargado: no había cierres nuevos.' })
+        return
+      }
+      onImportar(importados)
+      setMensaje({
+        ok: true,
+        texto: `Listo: se agregaron ${nuevos} ${nuevos === 1 ? 'cierre' : 'cierres'} al historial.`,
+      })
+    } catch (error) {
+      setMensaje({ ok: false, texto: error.message })
+    }
+  }
+
+  const boton =
+    'rounded-xl border-2 border-crema-200 bg-white px-4 py-2.5 text-sm font-bold text-cacao-900 transition enabled:hover:border-menta-500 disabled:cursor-not-allowed disabled:opacity-40'
+
+  return (
+    <section className="mt-10 rounded-3xl border-2 border-dashed border-crema-200 px-5 py-5">
+      <h3 className="font-display text-lg font-bold text-cacao-900">Copia de seguridad</h3>
+      <p className="mt-1 max-w-2xl text-sm text-cacao-800/60">
+        El historial de cierres solo se guarda en este navegador. Descarga una copia de vez en
+        cuando: si se borran los datos o se cambia de celular, se puede volver a cargar.
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" onClick={exportarJSON} disabled={!hayCierres} className={boton}>
+          Descargar respaldo
+        </button>
+        <button type="button" onClick={exportarCSV} disabled={!hayCierres} className={boton}>
+          Descargar para Excel
+        </button>
+        <button type="button" onClick={() => entrada.current?.click()} className={boton}>
+          Cargar respaldo…
+        </button>
+        <input
+          ref={entrada}
+          type="file"
+          accept="application/json,.json"
+          onChange={importar}
+          className="hidden"
+        />
+      </div>
+
+      {mensaje && (
+        <p
+          role="status"
+          className={`mt-3 text-sm font-medium ${mensaje.ok ? 'text-menta-700' : 'text-cono-600'}`}
+        >
+          {mensaje.texto}
+        </p>
+      )}
     </section>
   )
 }
