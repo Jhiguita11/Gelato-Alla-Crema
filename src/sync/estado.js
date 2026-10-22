@@ -24,6 +24,9 @@ export function estadoVacio() {
     cierres: [], // historial, el más reciente primero
     turnos: [], // de la jornada actual
     vitrina: { fecha: null, sabores: [], productosAgotados: [], saboresExtra: [] },
+    // Cambios del admin a la carta de fábrica: [{ id, datos, oculto }]
+    // (ver armarCarta en data/menu.js).
+    carta: [],
   }
 }
 
@@ -200,6 +203,37 @@ export function aplicarOp(estado, op, { asignarCodigo = true } = {}) {
           sabores: vitrina.sabores.filter((s) => s !== op.id),
         },
       }
+    }
+
+    // ── Carta (solo admin; el servidor lo vuelve a revisar) ────────────────
+    // Guarda los campos editables de un producto, nuevo o de fábrica. No toca
+    // si está oculto: editar y quitar son cosas aparte.
+    case 'guardarProducto': {
+      const { id, ...datos } = op.producto
+      const previo = estado.carta.find((c) => c.id === id)
+      if (previo && JSON.stringify(previo.datos) === JSON.stringify(datos)) return estado
+      const fila = { id, datos, oculto: previo?.oculto ?? false }
+      return {
+        ...estado,
+        carta: previo ? estado.carta.map((c) => (c.id === id ? fila : c)) : [...estado.carta, fila],
+      }
+    }
+
+    // Quitar de la carta = ocultar. Nunca se borra: los pedidos lo nombran.
+    case 'ocultarProducto': {
+      const previo = estado.carta.find((c) => c.id === op.id)
+      if ((previo?.oculto ?? false) === op.oculto) return estado
+      const fila = { id: op.id, datos: previo?.datos ?? null, oculto: op.oculto }
+      return {
+        ...estado,
+        carta: previo ? estado.carta.map((c) => (c.id === op.id ? fila : c)) : [...estado.carta, fila],
+      }
+    }
+
+    // Un producto de fábrica vuelve a como venía (sin cambios y visible).
+    case 'restaurarProducto': {
+      if (!estado.carta.some((c) => c.id === op.id)) return estado
+      return { ...estado, carta: estado.carta.filter((c) => c.id !== op.id) }
     }
 
     default:

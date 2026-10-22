@@ -239,12 +239,62 @@ describir('servidor compartido (PostgREST + migraciones)', () => {
     expect((await cargarTodo(admin)).cierres).toHaveLength(2)
   })
 
+  // ── Carta editable ────────────────────────────────────────────────────────
+  const affogato = {
+    id: 'affogato',
+    name: 'Affogato',
+    icon: '☕',
+    category: 'casa',
+    price: 9000,
+    porciones: 1,
+    variantes: null,
+    variantesTitulo: null,
+    eligeSalsa: false,
+    incluye: ['Café espresso'],
+  }
+
+  it('el personal ve la carta pero NO la puede cambiar (aviso, no sesión vencida)', async () => {
+    expect((await cargarTodo(personal)).carta).toEqual([])
+    await expect(
+      ejecutarRemoto(personal, { tipo: 'guardarProducto', producto: affogato }),
+    ).rejects.toMatchObject({ codigo: 'solo_admin', transitorio: false })
+    await expect(
+      ejecutarRemoto(personal, { tipo: 'ocultarProducto', id: 'jugo', oculto: true }),
+    ).rejects.toMatchObject({ codigo: 'solo_admin' })
+    // Ni por fuera de la app, directo a la tabla.
+    await personal.from('carta').insert({ id: 'pirata', datos: {} })
+    expect((await cargarTodo(admin)).carta).toEqual([])
+  })
+
+  it('el admin agrega, edita, quita y restaura; el servidor coincide con el reducer', async () => {
+    let previstoCarta = (await cargarTodo(admin))
+    const paso = async (op) => {
+      await ejecutarRemoto(admin, op)
+      await ejecutarRemoto(admin, op) // reintento de la cola: idempotente
+      previstoCarta = aplicarOp(previstoCarta, op)
+      const real = await cargarTodo(personal) // lo ven todos los celulares
+      expect(real.carta.toSorted((a, b) => a.id.localeCompare(b.id))).toEqual(
+        previstoCarta.carta.toSorted((a, b) => a.id.localeCompare(b.id)),
+      )
+    }
+    await paso({ tipo: 'guardarProducto', producto: affogato })
+    await paso({ tipo: 'ocultarProducto', id: 'affogato', oculto: true })
+    await paso({ tipo: 'guardarProducto', producto: { ...affogato, price: 9500 } }) // sigue oculto
+    await paso({ tipo: 'ocultarProducto', id: 'limonada', oculto: true }) // de fábrica, sin editar
+    await paso({ tipo: 'restaurarProducto', id: 'limonada' })
+    const final = (await cargarTodo(personal)).carta
+    expect(final).toEqual([
+      { id: 'affogato', datos: expect.objectContaining({ price: 9500 }), oculto: true },
+    ])
+  })
+
   // ── Nadie más ─────────────────────────────────────────────────────────────
   it('otra cuenta no ve nada ni puede escribir', async () => {
     const intruso = clienteCon(process.env.GAC_TOKEN_INTRUSO)
     await expect(cargarTodo(intruso)).rejects.toMatchObject({ sesion: true, codigo: 'sin_acceso' })
     const { data } = await intruso.from('pedidos').select('id')
     expect(data).toEqual([])
+    expect((await intruso.from('carta').select('id')).data).toEqual([])
     await expect(
       ejecutarRemoto(intruso, { tipo: 'crearPedido', pedido: pedido(5) }),
     ).rejects.toMatchObject({ sesion: true })

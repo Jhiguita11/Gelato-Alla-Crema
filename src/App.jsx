@@ -4,6 +4,7 @@ import Entrada from './components/Entrada'
 import { AvisosListos, BarraActivarAvisos } from './components/AvisosPedidos'
 import EstadoSync, { AvisoSync } from './components/EstadoSync'
 import Caja from './views/Caja'
+import Carta from './views/Carta'
 import Disponibilidad from './views/Disponibilidad'
 import NuevoPedido from './views/NuevoPedido'
 import PedidosPendientes from './views/PedidosPendientes'
@@ -11,18 +12,26 @@ import { BRAND } from './data/menu'
 import { useDisponibilidad } from './store/disponibilidad'
 import { useOrders } from './store/orders'
 import { useTurnos } from './store/turnos'
+import { useMotor } from './sync/MotorProvider'
 import { hora } from './utils/describir'
 
 export default function App() {
   const { orders } = useOrders()
   const { necesitaApertura, saboresActivos, catalogo } = useDisponibilidad()
   const { persona, desde, salir } = useTurnos()
+  const { rol } = useMotor()
+  const esAdmin = rol === 'admin'
   const [vista, setVista] = useState('nuevo')
   const [aviso, setAviso] = useState(null)
 
   // Sin entregar: en preparación o listos para recoger.
   const pendientes = orders.filter((o) => !o.oculto && o.status !== 'despachado').length
   const agotados = catalogo.length - saboresActivos.length
+
+  // Si se sale del modo admin estando en Carta, no se queda en una pantalla vacía.
+  useEffect(() => {
+    if (!esAdmin && vista === 'carta') setVista('nuevo')
+  }, [esAdmin, vista])
 
   useEffect(() => {
     if (!aviso) return
@@ -86,6 +95,12 @@ export default function App() {
             <BotonVista activo={vista === 'caja'} onClick={() => setVista('caja')}>
               Caja
             </BotonVista>
+            {/* Cambiar la carta es solo del admin (la base también lo exige). */}
+            {esAdmin && (
+              <BotonVista activo={vista === 'carta'} onClick={() => setVista('carta')}>
+                Editar carta
+              </BotonVista>
+            )}
           </nav>
 
           <EstadoSync />
@@ -134,6 +149,7 @@ export default function App() {
         {vista === 'pendientes' && <PedidosPendientes />}
         {vista === 'disponibilidad' && <Disponibilidad />}
         {vista === 'caja' && <Caja />}
+        {vista === 'carta' && esAdmin && <Carta />}
       </main>
 
       <AvisoSync />

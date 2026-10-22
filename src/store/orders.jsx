@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo } from 'react'
-import { orderTotal } from '../data/menu'
+import { congelarLinea, orderTotal } from '../data/menu'
 import { useMotor } from '../sync/MotorProvider'
 
 const OrdersContext = createContext(null)
@@ -27,6 +27,9 @@ export function OrdersProvider({ children }) {
   const addOrder = useCallback(
     ({ table, lines, note, customer, takenBy, paid = false }) => {
       const ahora = Date.now()
+      // Nombre y precio quedan fijos en el pedido: si después el admin cambia
+      // la carta, lo vendido no cambia (ver congelarLinea en data/menu.js).
+      lines = lines.map(congelarLinea)
       const pedido = {
         id: crypto.randomUUID(),
         table,

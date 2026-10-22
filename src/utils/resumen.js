@@ -1,4 +1,4 @@
-import { ADICIONES_EXTRA, PRODUCTS, lineTotal, varianteDe } from '../data/menu'
+import { ADICIONES_EXTRA, lineTotal, productoPorId, varianteDe } from '../data/menu'
 import { catalogoSabores } from './catalogo'
 
 /**
@@ -20,8 +20,10 @@ export function saboresDeLinea(line) {
 
 /** Cuántas porciones de helado lleva una línea, contando las unidades. */
 export function porcionesDeLinea(line) {
-  const product = PRODUCTS.find((p) => p.id === line.productId)
-  const base = varianteDe(product, line.varianteId)?.porciones ?? product?.porciones ?? 0
+  const product = productoPorId(line.productId)
+  const base = Number.isFinite(line.porciones)
+    ? line.porciones
+    : (varianteDe(product, line.varianteId)?.porciones ?? product?.porciones ?? 0)
   const extras = ADICIONES_EXTRA.filter(
     (a) => a.pideSabor && (line.adicionIds ?? []).includes(a.id),
   ).length
@@ -78,12 +80,12 @@ export function resumenDelDia(todos, turnos = []) {
       const cantidad = linea.quantity ?? 1
       unidades += cantidad
 
-      const producto = PRODUCTS.find((p) => p.id === linea.productId)
+      const producto = productoPorId(linea.productId)
       const clave = linea.productId
       const acumulado = porProducto.get(clave) ?? {
         id: clave,
-        name: producto?.name ?? clave,
-        icon: producto?.icon ?? '🍦',
+        name: linea.nombre ?? producto?.name ?? clave,
+        icon: linea.icono ?? producto?.icon ?? '🍦',
         cantidad: 0,
         total: 0,
       }

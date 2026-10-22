@@ -1,11 +1,11 @@
-import { ADICIONES_EXTRA, PRODUCTS, SAUCES, varianteDe } from '../data/menu'
+import { ADICIONES_EXTRA, SAUCES, productoPorId, varianteDe } from '../data/menu'
 import { catalogoSabores } from './catalogo'
 
 const nombre = (lista, id) => lista.find((x) => x.id === id)?.name ?? id
 
 /** Convierte una línea de pedido en texto legible para caja y cocina. */
 export function describirLinea(line) {
-  const product = PRODUCTS.find((p) => p.id === line.productId)
+  const product = productoPorId(line.productId)
 
   // Agrupa sabores repetidos: ['mora','mora'] → "2× Mora"
   const conteo = {}
@@ -23,7 +23,10 @@ export function describirLinea(line) {
   })
 
   const variante = varianteDe(product, line.varianteId)
-  const porciones = variante?.porciones ?? product?.porciones ?? 0
+  // Congeladas al enviar el pedido (ver congelarLinea); si no, de la carta.
+  const porciones = Number.isFinite(line.porciones)
+    ? line.porciones
+    : (variante?.porciones ?? product?.porciones ?? 0)
 
   // Las opciones propias del producto (recipiente, licor) se muestran con el
   // título con el que se preguntaron, sin el signo de interrogación.
@@ -39,10 +42,12 @@ export function describirLinea(line) {
     .filter((e) => e.valor)
 
   return {
-    titulo: product?.name ?? 'Producto',
-    icono: product?.icon ?? '🍦',
+    // El nombre con el que se vendió (congelado en la línea) manda sobre el
+    // de ahora: si el admin renombra el producto, el pedido no cambia.
+    titulo: line.nombre ?? product?.name ?? 'Producto',
+    icono: line.icono ?? product?.icon ?? '🍦',
     porciones: porciones > 0 ? `${porciones} ${porciones === 1 ? 'porción' : 'porciones'}` : null,
-    variante: variante?.name ?? null,
+    variante: line.varianteNombre ?? variante?.name ?? null,
     opciones,
     extras,
     sabores,

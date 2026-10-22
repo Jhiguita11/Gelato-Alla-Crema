@@ -2,7 +2,8 @@
  * ── CARTA DE GELATO ALLA CREMA ──────────────────────────────────────────────
  *
  * Transcrita de las fotos de la carta física (carpeta Carta/).
- * Este es el ÚNICO archivo que hay que tocar para cambiar la carta.
+ * Esta es la carta de fábrica. El admin la puede ajustar desde la app (pantalla
+ * Carta) sin tocar este archivo: ver `armarCarta` más abajo.
  * Precios en pesos colombianos (COP), sin puntos ni comas.
  *
  * Campos de cada producto:
@@ -403,6 +404,58 @@ export const PRODUCTS = [
   },
 ]
 
+/**
+ * ── CARTA VIGENTE ───────────────────────────────────────────────────────────
+ * PRODUCTS es la carta "de fábrica". El admin la puede cambiar desde la app
+ * (pantalla Carta): editar, quitar (ocultar) o agregar productos. Esos cambios
+ * viven en `estado.carta` como una lista de { id, datos, oculto }:
+ *   · datos  → los campos editables del producto (null = sin cambios).
+ *   · oculto → quitado de la carta; se puede volver a poner.
+ * `armarCarta` junta las dos cosas. Nunca se borra un producto de verdad: los
+ * pedidos viejos tienen que poder seguir mostrándolo.
+ */
+
+/** Campos que el admin puede editar. El resto (opciones, extras) se conserva. */
+export const CAMPOS_EDITABLES = [
+  'name', 'icon', 'category', 'price', 'porciones', 'variantes', 'variantesTitulo', 'eligeSalsa', 'incluye',
+]
+
+/**
+ * Carta vigente: los de fábrica (con sus cambios) y los agregados desde la
+ * app, en ese orden. Cada elemento: { producto, oculto, deFabrica, editado }.
+ */
+export function armarCarta(cambios = []) {
+  const porId = new Map(cambios.map((c) => [c.id, c]))
+  const deFabrica = PRODUCTS.map((base) => {
+    const c = porId.get(base.id)
+    return {
+      producto: c?.datos ? { ...base, ...c.datos, id: base.id } : base,
+      oculto: !!c?.oculto,
+      deFabrica: true,
+      editado: !!c?.datos,
+    }
+  })
+  const fabrica = new Set(PRODUCTS.map((p) => p.id))
+  const nuevos = cambios
+    .filter((c) => !fabrica.has(c.id) && c.datos)
+    .map((c) => ({ producto: { ...c.datos, id: c.id }, oculto: !!c.oculto, deFabrica: false, editado: false }))
+  return [...deFabrica, ...nuevos]
+}
+
+// Última carta conocida (la fija DisponibilidadProvider en cada render), para
+// las funciones que no pasan por React: precios, descripción, resumen.
+let cartaVigente = null
+
+export function fijarCarta(carta) {
+  cartaVigente = carta
+}
+
+/** Busca un producto por id, aunque esté oculto (los pedidos viejos lo usan). */
+export function productoPorId(id) {
+  if (cartaVigente) return cartaVigente.find((x) => x.producto.id === id)?.producto ?? null
+  return PRODUCTS.find((p) => p.id === id) ?? null
+}
+
 /** Formatea un número como precio colombiano: 11000 → "$ 11.000" */
 export function formatCOP(value) {
   return `$ ${Math.round(value).toLocaleString('es-CO')}`
@@ -415,29 +468,55 @@ export function varianteDe(product, varianteId) {
 
 /** Precio base de un producto (el menor, si tiene variantes). */
 export function precioDesde(product) {
-  if (product.variantes) return Math.min(...product.variantes.map((v) => v.price))
-  return product.price
+  if (product.variantes?.length) return Math.min(...product.variantes.map((v) => v.price))
+  return product.price ?? 0
 }
 
 /** Cuántos sabores hay que elegir para una línea ya configurada. */
 export function porcionesDe(product, varianteId) {
-  if (product.variantes) return varianteDe(product, varianteId)?.porciones ?? 0
+  if (product.variantes?.length) return varianteDe(product, varianteId)?.porciones ?? 0
   return product.porciones ?? 0
 }
 
-/** Calcula el precio de una línea de pedido. */
-export function lineTotal(line) {
-  const product = PRODUCTS.find((p) => p.id === line.productId)
+/** Precio de UNA unidad de la línea con la carta de ahora (base + adiciones). */
+export function precioUnitario(line) {
+  const product = productoPorId(line.productId)
   if (!product) return 0
-
-  let total = product.variantes
+  let total = product.variantes?.length
     ? (varianteDe(product, line.varianteId)?.price ?? 0)
     : (product.price ?? 0)
-
   for (const id of line.adicionIds ?? []) {
     total += ADICIONES_EXTRA.find((a) => a.id === id)?.price ?? 0
   }
-  return total * (line.quantity ?? 1)
+  return total
+}
+
+/**
+ * Precio de una línea de pedido. Una línea ya enviada trae su precio
+ * congelado (`precio`, ver `congelarLinea`): si el admin cambia el precio a
+ * media tarde, lo que ya se vendió no cambia ni en la caja ni en el cierre.
+ */
+export function lineTotal(line) {
+  const unidad = Number.isFinite(line.precio) ? line.precio : precioUnitario(line)
+  return unidad * (line.quantity ?? 1)
+}
+
+/** Al enviar el pedido: guarda en la línea el nombre y el precio de ese momento. */
+export function congelarLinea(line) {
+  const product = productoPorId(line.productId)
+  const variante = varianteDe(product, line.varianteId)
+  return {
+    ...line,
+    nombre: line.nombre ?? product?.name ?? null,
+    icono: line.icono ?? product?.icon ?? null,
+    varianteNombre: line.varianteNombre ?? variante?.name ?? null,
+    porciones: Number.isFinite(line.porciones)
+      ? line.porciones
+      : product
+        ? porcionesDe(product, line.varianteId)
+        : 0,
+    precio: Number.isFinite(line.precio) ? line.precio : precioUnitario(line),
+  }
 }
 
 /** Suma el total de un pedido completo. */

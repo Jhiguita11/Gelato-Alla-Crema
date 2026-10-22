@@ -2,7 +2,6 @@ import { useState } from 'react'
 import ProductoBuilder from '../components/ProductoBuilder'
 import {
   CATEGORIES,
-  PRODUCTS,
   TABLES,
   formatCOP,
   lineTotal,
@@ -16,7 +15,7 @@ import { describirLinea } from '../utils/describir'
 
 export default function NuevoPedido({ onEnviado }) {
   const { addOrder } = useOrders()
-  const { productoAgotado } = useDisponibilidad()
+  const { productoAgotado, productos } = useDisponibilidad()
   const { persona } = useTurnos()
 
   const [productoActivo, setProductoActivo] = useState(null)
@@ -68,8 +67,8 @@ export default function NuevoPedido({ onEnviado }) {
           </p>
 
           {CATEGORIES.map((categoria) => {
-            const productos = PRODUCTS.filter((p) => p.category === categoria.id)
-            if (productos.length === 0) return null
+            const deLaSeccion = productos.filter((p) => p.category === categoria.id)
+            if (deLaSeccion.length === 0) return null
             return (
               <div key={categoria.id} className="mt-7">
                 <h3 className="mb-3 flex items-center gap-3 font-display text-lg font-bold text-menta-700">
@@ -77,7 +76,7 @@ export default function NuevoPedido({ onEnviado }) {
                   <span className="h-px flex-1 bg-crema-200" />
                 </h3>
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {productos.map((producto) => {
+                  {deLaSeccion.map((producto) => {
                     const agotado = productoAgotado(producto.id)
                     return (
                     <button
