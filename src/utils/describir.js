@@ -15,6 +15,13 @@ export function describirLinea(line) {
     n > 1 ? `${n}× ${nombre(catalogo, id)}` : nombre(catalogo, id),
   )
 
+  // Lo mismo, pero con el color de cada sabor: la cola de cocina los pinta
+  // como fichas para ubicarlos sin leer.
+  const saboresDetalle = Object.entries(conteo).map(([id, n]) => {
+    const sabor = catalogo.find((x) => x.id === id)
+    return { id, nombre: sabor?.name ?? id, color: sabor?.color ?? null, n }
+  })
+
   const variante = varianteDe(product, line.varianteId)
   const porciones = variante?.porciones ?? product?.porciones ?? 0
 
@@ -39,6 +46,7 @@ export function describirLinea(line) {
     opciones,
     extras,
     sabores,
+    saboresDetalle,
     salsa: line.sauceId ? nombre(SAUCES, line.sauceId) : null,
     // La porción extra se nombra con su sabor: "Porción extra (Lulo)".
     adiciones: (line.adicionIds ?? []).map((id) => {

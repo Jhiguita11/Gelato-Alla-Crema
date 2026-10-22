@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSonidoBloqueado, useSonidoPedidosNuevos } from '../components/AvisosPedidos'
-import { DetalleLinea } from './NuevoPedido'
-import { formatCOP, lineTotal } from '../data/menu'
+import { formatCOP } from '../data/menu'
 import { useOrders } from '../store/orders'
 import { useMotor } from '../sync/MotorProvider'
 import { espera } from '../utils/avisos'
@@ -186,7 +185,7 @@ export default function PedidosPendientes() {
           </p>
         </div>
       ) : (
-        <div className="mt-6 grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-6 grid items-start gap-5 lg:grid-cols-2 2xl:grid-cols-3">
           {visibles.map((pedido) => (
             <TarjetaPedido
               key={pedido.id}
@@ -233,10 +232,148 @@ function Indicador({ valor, etiqueta, acento, pequeno }) {
   )
 }
 
+/*
+ * ── Tarjeta de un pedido ────────────────────────────────────────────────────
+ * Se lee de arriba a abajo en tres zonas:
+ *   1. Dónde va y cuánto lleva: mesa + puesto en la fila + minutos esperando.
+ *   2. Qué preparar: cada línea en grande, los sabores como fichas de color y
+ *      la nota como alerta (es lo que más se pasa por alto).
+ *   3. Qué hacer: un solo botón grande según el estado; abajo, en pequeño, el
+ *      número, quién lo tomó, la hora y el pago (una sola vez).
+ * El estado no depende solo del color: la barra de pasos lo dice con texto.
+ */
+
+const PASOS = [
+  { id: 'pendiente', label: 'Preparando' },
+  { id: 'listo', label: 'Listo' },
+  { id: 'despachado', label: 'Entregado' },
+]
+
 const COLOR_ESPERA = {
-  bien: 'bg-menta-500 text-white',
-  atento: 'bg-cono-500 text-white',
-  tarde: 'bg-terracota-600 text-white animate-pulse',
+  bien: 'text-menta-700',
+  atento: 'text-cono-600',
+  tarde: 'text-terracota-600 animate-pulse',
+}
+
+function PasosEstado({ status }) {
+  const actual = PASOS.findIndex((p) => p.id === status)
+  return (
+    <ol
+      className="flex items-center gap-1.5 border-b border-crema-200 px-4 py-3 text-xs sm:gap-2 sm:px-5 sm:text-sm"
+      aria-label={`Estado: ${PASOS[actual]?.label ?? ''}`}
+    >
+      {PASOS.map((paso, i) => {
+        const hecho = i < actual
+        const ahora = i === actual
+        return (
+          <li key={paso.id} className="flex flex-1 items-center gap-1.5 last:flex-none sm:gap-2">
+            <span
+              aria-hidden="true"
+              className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold ${
+                ahora
+                  ? status === 'listo'
+                    ? 'bg-cono-500 text-white'
+                    : status === 'despachado'
+                      ? 'bg-menta-700 text-crema-50'
+                      : 'bg-menta-800 text-crema-50'
+                  : hecho
+                    ? 'bg-menta-100 text-menta-700'
+                    : 'border-2 border-crema-200 text-cacao-800/30'
+              }`}
+            >
+              {hecho ? '✓' : i + 1}
+            </span>
+            <span
+              className={`whitespace-nowrap ${
+                ahora ? 'font-bold text-cacao-900' : 'font-medium text-cacao-800/45'
+              }`}
+              aria-current={ahora ? 'step' : undefined}
+            >
+              {paso.label}
+            </span>
+            {i < PASOS.length - 1 && (
+              <span
+                aria-hidden="true"
+                className={`h-0.5 min-w-3 flex-1 rounded-full ${hecho ? 'bg-menta-500' : 'bg-crema-200'}`}
+              />
+            )}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+/** Ficha de un sabor con su color. Los sabores claros llevan borde para verse. */
+function ChipSabor({ sabor }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border-2 border-crema-200 bg-crema-50 px-3.5 py-1.5 text-base font-semibold text-cacao-900">
+      <span
+        aria-hidden="true"
+        className="h-4 w-4 shrink-0 rounded-full border border-cacao-900/15"
+        style={{ backgroundColor: sabor.color ?? 'var(--color-crema-300)' }}
+      />
+      {sabor.nombre}
+      {sabor.n > 1 && <span className="font-bold text-terracota-600">×{sabor.n}</span>}
+    </span>
+  )
+}
+
+function LineaComanda({ linea }) {
+  const d = describirLinea(linea)
+  // "Cono, vaso o canasta" no le dice a cocina qué servir: si se eligió el
+  // recipiente, ese es el título ("Vaso · 3 porciones"). Las demás opciones
+  // (licor…) van como etiquetas junto al título.
+  const recipiente = linea.opciones?.recipiente
+  const titulo = recipiente ?? d.titulo
+  const etiquetas = d.opciones.filter((o) => o.valor !== recipiente).map((o) => o.valor)
+  // Lo que va encima o aparte, en una sola línea secundaria.
+  const encima = [
+    d.salsa && `Salsa ${d.salsa.toLowerCase()}`,
+    ...d.extras.map((e) => `${e.etiqueta}: ${e.valor}`),
+    d.adiciones.length > 0 && `Adición: ${d.adiciones.join(', ')}`,
+  ].filter(Boolean)
+
+  return (
+    <li className="flex items-start gap-3">
+      <span className="mt-0.5 text-3xl leading-none" aria-hidden="true">
+        {d.icono}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-xl font-bold leading-snug text-cacao-900">
+          <span className={d.cantidad > 1 ? 'text-terracota-600' : 'text-cacao-800/50'}>
+            {d.cantidad} ×{' '}
+          </span>
+          {titulo}
+          {d.porciones && (
+            <span className="font-semibold text-cacao-800/60"> · {d.porciones}</span>
+          )}
+        </p>
+        {etiquetas.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {etiquetas.map((t) => (
+              <span
+                key={t}
+                className="rounded-lg bg-cacao-100 px-2.5 py-1 text-sm font-bold uppercase tracking-wide text-cacao-800"
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
+        {d.saboresDetalle.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {d.saboresDetalle.map((s) => (
+              <ChipSabor key={s.id} sabor={s} />
+            ))}
+          </div>
+        )}
+        {encima.length > 0 && (
+          <p className="mt-2 text-base font-medium text-cacao-800/75">{encima.join(' · ')}</p>
+        )}
+      </div>
+    </li>
+  )
 }
 
 function TarjetaPedido({
@@ -254,143 +391,113 @@ function TarjetaPedido({
   const listo = pedido.status === 'listo'
   const entregado = pedido.status === 'despachado'
   const e = espera(pedido.createdAt, ahora)
-
-  const cabecera = entregado
-    ? 'bg-crema-100 text-cacao-900'
-    : listo
-      ? 'bg-cono-500 text-white'
-      : 'bg-menta-800 text-crema-50'
+  const paraLlevar = pedido.table === 'Para llevar'
 
   return (
     <article
-      className={`animar-entrada flex flex-col overflow-hidden rounded-3xl border-2 bg-white shadow-sm transition ${
+      className={`animar-entrada flex flex-col overflow-hidden rounded-3xl border-[3px] bg-white shadow-sm transition ${
         entregado
-          ? 'border-crema-200 opacity-70'
+          ? 'border-crema-200 opacity-75'
           : listo
-            ? 'border-cono-500'
-            : 'border-menta-800/30 shadow-cacao-900/5'
+            ? 'border-cono-500 shadow-lg shadow-cono-500/15'
+            : 'border-menta-700/40 shadow-cacao-900/5'
       } ${reciente ? 'ring-4 ring-cono-500/60' : ''}`}
     >
-      <header className={`flex items-center gap-3 px-4 py-3 ${cabecera}`}>
+      <PasosEstado status={pedido.status} />
+
+      {/* 1 · Dónde va y cuánto lleva */}
+      <header className="flex items-center gap-4 px-5 pb-2 pt-4">
         {enPreparacion && puesto && (
           <span
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-crema-50 font-display text-lg font-bold text-menta-800"
+            className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-menta-800 font-display text-2xl font-bold text-crema-50"
             title={`${puesto}º en la fila`}
           >
             {puesto}º
           </span>
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="font-display text-2xl font-bold leading-none">
-              {pedido.table === 'Para llevar' ? 'Para llevar' : `Mesa ${pedido.table}`}
-            </span>
-            {pedido.code ? (
-              <span className="text-sm font-semibold opacity-80">#{pedido.code}</span>
-            ) : (
-              // Tomado sin internet: el número lo pone el servidor al subirlo.
-              <span className="text-sm font-semibold opacity-60" title="Por enviar">
-                #···
-              </span>
-            )}
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-display text-4xl font-bold leading-none text-cacao-900">
+              {paraLlevar ? 'Para llevar' : `Mesa ${pedido.table}`}
+            </h3>
             {reciente && (
-              <span className="rounded-full bg-crema-50 px-2 py-0.5 text-[11px] font-bold uppercase text-cono-600">
+              <span className="rounded-full bg-cono-500 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-white">
                 Nuevo
               </span>
             )}
           </div>
-          <p className="mt-1 truncate text-xs opacity-80">
-            {[pedido.customer, pedido.takenBy && `Tomó: ${pedido.takenBy}`, hora(pedido.createdAt)]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
+          {pedido.customer && (
+            <p className="mt-1.5 truncate text-lg text-cacao-800/70">Para {pedido.customer}</p>
+          )}
         </div>
         <div className="shrink-0 text-right">
           {enPreparacion ? (
-            <span
-              className={`inline-block rounded-xl px-2.5 py-1 font-display text-lg font-bold leading-none ${COLOR_ESPERA[e.nivel]}`}
-              title="Tiempo de espera"
-            >
-              {e.minutos} min
-            </span>
+            <>
+              <p
+                className={`font-display text-4xl font-bold leading-none ${COLOR_ESPERA[e.nivel]}`}
+                title="Tiempo de espera"
+              >
+                {e.minutos}
+                <span className="text-lg"> min</span>
+              </p>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-cacao-800/45">
+                esperando
+              </p>
+            </>
           ) : listo ? (
-            <span className="text-xs font-bold">Listo {haceCuanto(pedido.listoAt ?? ahora)}</span>
+            <>
+              <p className="font-display text-xl font-bold leading-tight text-cono-600">
+                🔔 Para recoger
+              </p>
+              <p className="mt-1 text-sm text-cacao-800/55">
+                listo {haceCuanto(pedido.listoAt ?? ahora)}
+              </p>
+            </>
           ) : (
-            <span className="text-xs">Entregado {hora(pedido.dispatchedAt)}</span>
-          )}
-          {!pedido.paid && (
-            <span className="mt-1 block text-[11px] font-bold uppercase tracking-wide opacity-90">
-              Sin pagar
-            </span>
+            <p className="text-sm font-semibold text-menta-700">
+              ✓ Entregado
+              <br />
+              <span className="font-normal text-cacao-800/55">{haceCuanto(pedido.dispatchedAt)}</span>
+            </p>
           )}
         </div>
       </header>
 
-      <div className="flex-1 space-y-3 px-4 py-3.5">
-        {pedido.lines.map((linea, i) => {
-          const d = describirLinea(linea)
-          return (
-            <div key={linea.uid ?? i} className="flex items-start gap-2.5">
-              <span className="text-xl leading-none" aria-hidden="true">
-                {d.icono}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-cacao-900">
-                  {d.cantidad > 1 && <span className="text-terracota-600">{d.cantidad}× </span>}
-                  {d.titulo}
-                  {d.porciones && (
-                    <span className="font-normal text-cacao-800/60"> · {d.porciones}</span>
-                  )}
-                </p>
-                <DetalleLinea d={d} className="text-sm" />
-              </div>
-              <span className="shrink-0 text-sm font-semibold text-cacao-800/70">
-                {formatCOP(lineTotal(linea))}
-              </span>
-            </div>
-          )
-        })}
+      {/* 2 · Qué preparar */}
+      <div className="flex-1 px-5 pb-4 pt-3">
+        <ul className="space-y-4">
+          {pedido.lines.map((linea, i) => (
+            <LineaComanda key={linea.uid ?? i} linea={linea} />
+          ))}
+        </ul>
 
         {pedido.note && (
-          <p className="rounded-xl border-2 border-cacao-600/40 bg-cacao-100 px-3 py-2 text-sm text-cacao-900">
-            <span className="font-bold">Nota:</span> {pedido.note}
+          <p className="mt-4 flex items-start gap-2.5 rounded-2xl border-2 border-cono-500 bg-cono-100 px-4 py-3 text-lg font-semibold leading-snug text-cacao-900">
+            <span aria-hidden="true">⚠️</span>
+            <span>
+              <span className="sr-only">Nota: </span>
+              {pedido.note}
+            </span>
           </p>
         )}
       </div>
 
-      <footer className="border-t border-crema-200 px-4 py-3">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onTogglePago}
-            className={`flex-1 rounded-xl border-2 px-3 py-2 text-left text-sm font-bold transition ${
-              pedido.paid
-                ? 'border-menta-500 bg-menta-100 text-cacao-900 hover:border-cacao-600'
-                : 'border-cacao-600 bg-cacao-100 text-cacao-900 hover:border-menta-500'
-            }`}
-            title={pedido.paid ? 'Marcar sin pagar' : 'Marcar pagado'}
-          >
-            {pedido.paid ? '✓ Pagado' : '● Sin pagar · tocar para cobrar'}
-          </button>
-          <span className="shrink-0 font-display text-xl font-bold text-cacao-900">
-            {formatCOP(pedido.total)}
-          </span>
-        </div>
-
+      {/* 3 · Qué hacer */}
+      <footer className="border-t-2 border-dashed border-crema-200 px-5 pb-4 pt-4">
         {enPreparacion && (
           <>
             <button
               type="button"
               onClick={onListo}
-              className="w-full rounded-xl bg-cono-500 px-4 py-3.5 text-base font-bold text-white shadow-md shadow-cono-500/25 transition hover:bg-cono-600"
+              className="w-full rounded-2xl bg-cono-500 px-4 py-5 text-xl font-bold text-white shadow-md shadow-cono-500/25 transition hover:bg-cono-600 active:scale-[0.99]"
             >
               🔔 Listo para recoger
             </button>
-            <div className="mt-2 flex justify-between text-xs font-semibold">
-              <button type="button" onClick={onEntregado} className="text-cacao-800/55 hover:text-menta-700">
+            <div className="mt-3 flex justify-between text-sm font-semibold">
+              <button type="button" onClick={onEntregado} className="py-1 text-cacao-800/55 hover:text-menta-700">
                 Ya se entregó
               </button>
-              <button type="button" onClick={onAnular} className="text-cacao-800/45 hover:text-terracota-600">
+              <button type="button" onClick={onAnular} className="py-1 text-cacao-800/45 hover:text-terracota-600">
                 Anular
               </button>
             </div>
@@ -402,15 +509,15 @@ function TarjetaPedido({
             <button
               type="button"
               onClick={onEntregado}
-              className="w-full rounded-xl bg-menta-700 px-4 py-3.5 text-base font-bold text-crema-50 shadow-md shadow-menta-700/25 transition hover:bg-menta-800"
+              className="w-full rounded-2xl bg-menta-700 px-4 py-5 text-xl font-bold text-crema-50 shadow-md shadow-menta-700/25 transition hover:bg-menta-800 active:scale-[0.99]"
             >
               ✓ Entregado en la mesa
             </button>
-            <div className="mt-2 flex justify-between text-xs font-semibold">
-              <button type="button" onClick={onReabrir} className="text-cacao-800/55 hover:text-menta-700">
+            <div className="mt-3 flex justify-between text-sm font-semibold">
+              <button type="button" onClick={onReabrir} className="py-1 text-cacao-800/55 hover:text-menta-700">
                 Volver a preparación
               </button>
-              <button type="button" onClick={onAnular} className="text-cacao-800/45 hover:text-terracota-600">
+              <button type="button" onClick={onAnular} className="py-1 text-cacao-800/45 hover:text-terracota-600">
                 Anular
               </button>
             </div>
@@ -418,14 +525,11 @@ function TarjetaPedido({
         )}
 
         {entregado && (
-          <div className="flex items-center gap-2">
-            <span className="flex-1 rounded-xl bg-menta-100 px-3 py-2.5 text-center text-xs font-semibold text-menta-700">
-              ✓ Entregado {haceCuanto(pedido.dispatchedAt)}
-            </span>
+          <div className="flex items-center justify-between gap-3 text-sm font-semibold">
             <button
               type="button"
               onClick={onReabrir}
-              className="rounded-xl border-2 border-crema-200 px-3 py-2.5 text-xs font-semibold text-cacao-900 transition hover:border-menta-400"
+              className="rounded-xl border-2 border-crema-200 px-4 py-2.5 text-cacao-900 transition hover:border-menta-400"
             >
               Reabrir
             </button>
@@ -433,12 +537,38 @@ function TarjetaPedido({
               type="button"
               onClick={onAnular}
               aria-label={`Anular pedido ${pedido.code ?? 'sin número'}`}
-              className="rounded-xl border-2 border-crema-200 px-3 py-2.5 text-xs font-semibold text-terracota-600 transition hover:border-cono-500"
+              className="py-1 text-cacao-800/45 hover:text-terracota-600"
             >
-              ✕
+              Anular
             </button>
           </div>
         )}
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <p className="text-sm text-cacao-800/55">
+            {pedido.code ? (
+              <span className="font-semibold text-cacao-800/80">#{pedido.code}</span>
+            ) : (
+              // Tomado sin internet: el número lo pone el servidor al subirlo.
+              <span className="font-semibold" title="Por enviar">
+                #···
+              </span>
+            )}
+            {[pedido.takenBy, hora(pedido.createdAt)].filter(Boolean).map((t) => ` · ${t}`)}
+          </p>
+          <button
+            type="button"
+            onClick={onTogglePago}
+            title={pedido.paid ? 'Marcar sin pagar' : 'Marcar pagado'}
+            className={`shrink-0 rounded-full border-2 px-4 py-2 text-base font-bold transition ${
+              pedido.paid
+                ? 'border-menta-500 bg-menta-100 text-menta-800 hover:border-cacao-600'
+                : 'border-terracota-600 bg-terracota-100 text-terracota-600 hover:border-menta-500'
+            }`}
+          >
+            {pedido.paid ? `✓ Pagado ${formatCOP(pedido.total)}` : `Debe ${formatCOP(pedido.total)}`}
+          </button>
+        </div>
       </footer>
     </article>
   )
