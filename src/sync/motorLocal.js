@@ -28,6 +28,7 @@ export function leerLocal() {
         productosAgotados: vitrina?.productosAgotados ?? [],
         saboresExtra: leer(CLAVES.saboresExtra, []) ?? [],
       },
+      carta: leer(CLAVES.carta, []) ?? [],
     },
     activo: turnos.activo ?? null,
   }
@@ -52,6 +53,7 @@ export function escribirLocal(antes, despues, activoAntes, activoDespues) {
     )
   }
   if (vd.saboresExtra !== va.saboresExtra) escribir(CLAVES.saboresExtra, vd.saboresExtra)
+  if (despues.carta !== antes.carta) escribir(CLAVES.carta, despues.carta)
 }
 
 /** Cómo queda el turno de ESTE equipo después de una operación. */

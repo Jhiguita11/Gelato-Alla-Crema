@@ -15,6 +15,10 @@ import { cargarTodo, ejecutarRemoto, vaciarCola } from './remoto'
  * caiga la conexión un rato.
  */
 const CACHE = 'gac.compartido.cache.v1' // último estado del servidor (abre sin internet)
+
+// La caché puede venir de una versión anterior de la app, sin las partes
+// nuevas del estado (p. ej. `carta`): se completa con los valores vacíos.
+const desdeCache = () => ({ ...estadoVacio(), ...(leer(CACHE, null) ?? {}) })
 const COLA = 'gac.compartido.cola.v1' // operaciones por subir
 const TURNO = 'gac.compartido.turno.v1' // quién está conectado en ESTE celular
 
@@ -32,7 +36,7 @@ export function olvidarDatosDeAdmin() {
 }
 
 export function useMotorRemoto(cliente, { alPerderSesion } = {}) {
-  const [servidor, setServidor] = useState(() => leer(CACHE, null) ?? estadoVacio())
+  const [servidor, setServidor] = useState(() => desdeCache())
   const [cola, setCola] = useState(() => leer(COLA, []) ?? [])
   const [turnoActivo, setTurnoActivo] = useState(() => leer(TURNO, null))
   const [enLinea, setEnLinea] = useState(() => navigator.onLine)
@@ -148,7 +152,7 @@ export function useMotorRemoto(cliente, { alPerderSesion } = {}) {
     const onStorage = (e) => {
       if (e.key === COLA) setCola(leer(COLA, []) ?? [])
       if (e.key === TURNO) setTurnoActivo(leer(TURNO, null))
-      if (e.key === CACHE) setServidor(leer(CACHE, null) ?? estadoVacio())
+      if (e.key === CACHE) setServidor(desdeCache())
     }
     window.addEventListener('storage', onStorage)
 

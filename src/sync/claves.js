@@ -9,4 +9,5 @@ export const CLAVES = {
   turnos: 'gac.turnos.v1', // { activo, turnos }: el activo es de este equipo
   vitrina: 'gac.disponibilidad.v1', // { fecha, sabores, productosAgotados } | null
   saboresExtra: 'gac.sabores-extra.v1',
+  carta: 'gac.carta.v1', // cambios del admin a la carta: [{ id, datos, oculto }]
 }

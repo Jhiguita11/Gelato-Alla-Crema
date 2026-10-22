@@ -50,6 +50,25 @@ export function filaAVitrina(r) {
   }
 }
 
+export function filaACarta(r) {
+  return { id: r.id, datos: r.datos ?? null, oculto: r.oculto ?? false }
+}
+
+/**
+ * Cambios del admin a la carta. Si la base todavía no tiene la tabla (la app
+ * nueva llegó antes que la migración), se usa la carta de fábrica en vez de
+ * dejar a todos sin poder tomar pedidos.
+ */
+async function cargarCarta(cliente) {
+  try {
+    const filas = await hecho(cliente.from('carta').select('*').order('id'))
+    return filas.map(filaACarta)
+  } catch (e) {
+    if (e instanceof ErrorSync && ['PGRST205', '42P01'].includes(e.codigo)) return []
+    throw e
+  }
+}
+
 export function filaAJornada(r) {
   return { id: r?.jornada_id ?? null, contador: r?.contador ?? 0, abiertaAt: ms(r?.abierta_at) }
 }
@@ -121,7 +140,7 @@ export async function cargarTodo(cliente) {
     })
   }
   const jornada = filaAJornada(jornadaFila)
-  const [pedidos, turnos, cierres, vitrina] = await Promise.all([
+  const [pedidos, turnos, cierres, vitrina, carta] = await Promise.all([
     hecho(
       cliente
         .from('pedidos')
@@ -132,6 +151,7 @@ export async function cargarTodo(cliente) {
     hecho(cliente.from('turnos').select('*').eq('jornada_id', jornada.id).order('inicio')),
     hecho(cliente.from('cierres').select('*').order('cerrado_at', { ascending: false })),
     hecho(cliente.from('vitrina').select('*').eq('id', 1).maybeSingle()),
+    cargarCarta(cliente),
   ])
   return {
     ...estadoVacio(),
@@ -140,6 +160,7 @@ export async function cargarTodo(cliente) {
     turnos: turnos.map(filaATurno),
     cierres: cierres.map(filaACierre),
     vitrina: filaAVitrina(vitrina),
+    carta,
   }
 }
 
@@ -258,6 +279,18 @@ export async function ejecutarRemoto(cliente, op) {
       return null
     case 'eliminarSaborExtra':
       await rpc('eliminar_sabor_extra', { p_id: op.id })
+      return null
+    // Carta: solo el admin (las funciones responden 'solo_admin' si no).
+    case 'guardarProducto': {
+      const { id, ...datos } = op.producto
+      await rpc('carta_guardar', { p_id: id, p_datos: datos })
+      return null
+    }
+    case 'ocultarProducto':
+      await rpc('carta_ocultar', { p_id: op.id, p_oculto: op.oculto })
+      return null
+    case 'restaurarProducto':
+      await rpc('carta_restaurar', { p_id: op.id })
       return null
     default:
       throw new ErrorSync(`Operación desconocida: ${op.tipo}`)

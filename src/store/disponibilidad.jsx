@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo } from 'react'
-import { FLAVORS, PRODUCTS } from '../data/menu'
+import { FLAVORS, armarCarta, fijarCarta } from '../data/menu'
 import { useMotor } from '../sync/MotorProvider'
 import { fijarCatalogo } from '../utils/catalogo'
 
@@ -31,6 +31,13 @@ export function DisponibilidadProvider({ children }) {
   /** Los 16 de la casa más los que se hayan agregado desde la app. */
   const catalogo = useMemo(() => [...FLAVORS, ...vitrina.saboresExtra], [vitrina.saboresExtra])
   fijarCatalogo(catalogo)
+
+  /** Carta vigente: la de fábrica con los cambios del admin (ver armarCarta). */
+  const cambiosCarta = estado.carta ?? []
+  const carta = useMemo(() => armarCarta(cambiosCarta), [cambiosCarta])
+  fijarCarta(carta)
+  /** Lo que se puede vender: sin los productos quitados de la carta. */
+  const productos = useMemo(() => carta.filter((x) => !x.oculto).map((x) => x.producto), [carta])
 
   // Se vuelve a preguntar cuando cambia el día. En modo compartido, el primero
   // que abre el día lo abre para todos los celulares.
@@ -98,8 +105,22 @@ export function DisponibilidadProvider({ children }) {
   )
 
   const productosDisponibles = useMemo(
-    () => PRODUCTS.filter((p) => !productoAgotado(p.id)),
-    [productoAgotado],
+    () => productos.filter((p) => !productoAgotado(p.id)),
+    [productos, productoAgotado],
+  )
+
+  // ── Carta (pantalla del admin) ────────────────────────────────────────────
+  const guardarProducto = useCallback(
+    (producto) => ejecutar({ tipo: 'guardarProducto', producto }),
+    [ejecutar],
+  )
+  const ocultarProducto = useCallback(
+    (id, oculto) => ejecutar({ tipo: 'ocultarProducto', id, oculto }),
+    [ejecutar],
+  )
+  const restaurarProducto = useCallback(
+    (id) => ejecutar({ tipo: 'restaurarProducto', id }),
+    [ejecutar],
   )
 
   const value = useMemo(
@@ -108,9 +129,14 @@ export function DisponibilidadProvider({ children }) {
       fecha: vitrina.fecha,
       catalogo,
       saboresActivos,
+      carta,
+      productos,
       productosDisponibles,
       productoAgotado,
       esPersonalizado,
+      guardarProducto,
+      ocultarProducto,
+      restaurarProducto,
       abrirDia,
       toggleSabor,
       toggleProducto,
@@ -123,9 +149,14 @@ export function DisponibilidadProvider({ children }) {
       vitrina.fecha,
       catalogo,
       saboresActivos,
+      carta,
+      productos,
       productosDisponibles,
       productoAgotado,
       esPersonalizado,
+      guardarProducto,
+      ocultarProducto,
+      restaurarProducto,
       abrirDia,
       toggleSabor,
       toggleProducto,

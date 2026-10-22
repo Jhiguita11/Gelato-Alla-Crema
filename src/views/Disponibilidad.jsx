@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CATEGORIES, PRODUCTS, formatCOP, precioDesde } from '../data/menu'
+import { CATEGORIES, formatCOP, precioDesde } from '../data/menu'
 import { useDisponibilidad } from '../store/disponibilidad'
 
 /** Colores para la bolita del sabor nuevo. */
@@ -17,6 +17,7 @@ export default function Disponibilidad() {
     catalogo,
     saboresActivos,
     productoAgotado,
+    productos,
     esPersonalizado,
     toggleSabor,
     toggleProducto,
@@ -27,7 +28,7 @@ export default function Disponibilidad() {
   } = useDisponibilidad()
 
   const activos = new Set(saboresActivos.map((s) => s.id))
-  const agotados = PRODUCTS.filter((p) => productoAgotado(p.id)).length
+  const agotados = productos.filter((p) => productoAgotado(p.id)).length
 
   const fechaLegible = fecha
     ? new Date(`${fecha}T12:00:00`).toLocaleDateString('es-CO', {
@@ -140,15 +141,15 @@ export default function Disponibilidad() {
         </h3>
 
         {CATEGORIES.map((categoria) => {
-          const productos = PRODUCTS.filter((p) => p.category === categoria.id)
-          if (productos.length === 0) return null
+          const deLaSeccion = productos.filter((p) => p.category === categoria.id)
+          if (deLaSeccion.length === 0) return null
           return (
             <div key={categoria.id} className="mb-6">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-cacao-800/45">
                 {categoria.name}
               </p>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {productos.map((producto) => {
+                {deLaSeccion.map((producto) => {
                   const agotado = productoAgotado(producto.id)
                   return (
                     <button
