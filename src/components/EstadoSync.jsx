@@ -55,7 +55,7 @@ export function AvisoSync() {
   return (
     <div
       role="alert"
-      className="animar-entrada fixed inset-x-3 top-20 z-50 mx-auto flex max-w-md items-start gap-3 rounded-2xl bg-terracota-600 px-4 py-3 text-sm font-medium text-crema-50 shadow-xl"
+      className="animar-entrada fixed inset-x-3 top-20 z-[90] mx-auto flex max-w-md items-start gap-3 rounded-2xl bg-terracota-600 px-4 py-3 text-sm font-medium text-crema-50 shadow-xl"
     >
       <p className="flex-1">{aviso}</p>
       <button type="button" onClick={cerrarAviso} aria-label="Cerrar aviso" className="px-1">

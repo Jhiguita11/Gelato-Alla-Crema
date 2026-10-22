@@ -40,9 +40,11 @@ export default function AvisoActualizacion() {
   }
 
   return (
+    // Por encima de todas las ventanas (¿Quién entra?, apertura del día,
+    // documento): si quedara debajo, no se podría tocar "Actualizar".
     <div
       role="status"
-      className="animar-entrada fixed inset-x-3 bottom-24 z-50 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-cacao-900 px-4 py-3 text-sm text-crema-50 shadow-xl sm:bottom-6"
+      className="animar-entrada fixed inset-x-3 bottom-24 z-[90] mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-cacao-900 px-4 py-3 text-sm text-crema-50 shadow-xl sm:bottom-6"
     >
       <p className="flex-1">
         {hayVersionNueva
