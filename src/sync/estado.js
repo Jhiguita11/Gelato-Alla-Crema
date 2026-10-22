@@ -70,14 +70,24 @@ export function aplicarOp(estado, op, { asignarCodigo = true } = {}) {
         p.paid === op.paid ? p : { ...p, paid: op.paid, paidAt: op.paid ? op.at : null },
       )
 
+    // Flujo de un pedido: pendiente (en preparación) → listo (para recoger)
+    // → despachado (entregado en la mesa).
+    case 'marcarListo':
+      return cambiarPedido(estado, op.id, (p) =>
+        p.status !== 'pendiente' ? p : { ...p, status: 'listo', listoAt: op.at },
+      )
+
     case 'despachar':
       return cambiarPedido(estado, op.id, (p) =>
         p.status === 'despachado' ? p : { ...p, status: 'despachado', dispatchedAt: op.at },
       )
 
+    // Vuelve a preparación (desde listo o entregado).
     case 'reabrir':
       return cambiarPedido(estado, op.id, (p) =>
-        p.status === 'pendiente' ? p : { ...p, status: 'pendiente', dispatchedAt: null },
+        p.status === 'pendiente'
+          ? p
+          : { ...p, status: 'pendiente', dispatchedAt: null, listoAt: null },
       )
 
     // Eliminar un pedido lo ANULA: deja de contar en la caja, pero queda

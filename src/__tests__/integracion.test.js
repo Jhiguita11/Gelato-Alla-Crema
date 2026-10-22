@@ -40,6 +40,7 @@ function delDia(e) {
         createdAt: p.createdAt,
         conPago: p.paidAt !== null,
         conDespacho: p.dispatchedAt !== null,
+        conListo: p.listoAt != null,
         oculto: Boolean(p.oculto),
         anulado: Boolean(p.anuladoAt),
         anuladoPor: p.anuladoPor ?? null,
@@ -111,7 +112,11 @@ describir('servidor compartido (PostgREST + migraciones)', () => {
 
   it('limpiar OCULTA y eliminar ANULA: ninguna venta desaparece', async () => {
     await hacer({ tipo: 'marcarPago', id: p1.id, paid: true, at: Date.now() })
+    await hacer({ tipo: 'marcarListo', id: p1.id, at: Date.now() })
+    await coincide()
     await hacer({ tipo: 'despachar', id: p1.id, at: Date.now() })
+    // "Listo" sobre uno ya entregado no lo devuelve atrás (servidor = reducer).
+    await hacer({ tipo: 'marcarListo', id: p1.id, at: Date.now() })
     await hacer({ tipo: 'despachar', id: p3.id, at: Date.now() })
     await hacer({ tipo: 'reabrir', id: p3.id })
     await hacer({ tipo: 'limpiarDespachados' })

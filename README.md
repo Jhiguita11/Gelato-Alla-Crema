@@ -84,6 +84,25 @@ en el encabezado, y arriba se ve cuántos son y **cuánto falta por cobrar**.
 Por lo mismo, **"Limpiar despachados y pagados" no borra los que deben**: solo
 se lleva los que ya están entregados *y* cobrados.
 
+**Cocina y avisos** — Un pedido pasa por tres estados: **En preparación →
+Listo para recoger → Entregado**. La pantalla de Pedidos los ordena por
+llegada (el que se pidió primero va primero, con su puesto en la fila: 1º, 2º…)
+y muestra cuánto lleva esperando: verde hasta 7 min, naranja desde 8, rojo
+desde 15.
+
+- Con la pantalla de **Pedidos** abierta, **suena** cada vez que entra un
+  pedido nuevo (pensado para el celular o la tablet de la cocina). En las
+  demás pantallas no suena.
+- Cuando cocina toca **Listo para recoger**, al mesero que tomó el pedido le
+  llega un **aviso** con sonido y vibración, y un botón **Entregado**. Si la
+  app está en segundo plano, además sale una **notificación del sistema**.
+- Los navegadores no dejan sonar ni notificar sin permiso: la barra verde de
+  arriba pide activarlo una vez por celular. Los sonidos se generan en el
+  navegador (no hay archivos de audio) y funcionan sin internet.
+- Las notificaciones llegan mientras la app esté abierta, aunque sea en
+  segundo plano. Con la app cerrada del todo no llegan (eso necesitaría
+  notificaciones push desde un servidor).
+
 **Disponibilidad** — La app arranca cada día preguntando **qué sabores hay en
 la vitrina**; lo que no se marque no se puede pedir. La pregunta vuelve a salir
 sola cuando cambia el día.

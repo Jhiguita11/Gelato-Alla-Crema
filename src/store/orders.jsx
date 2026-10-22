@@ -5,6 +5,12 @@ import { useMotor } from '../sync/MotorProvider'
 const OrdersContext = createContext(null)
 
 /**
+ * Pedidos que ESTE equipo marcó como listos: a quien lo marcó no hay que
+ * avisarle que está listo (ver components/AvisosPedidos.jsx).
+ */
+export const marcadosAqui = new Set()
+
+/**
  * Pedidos de la jornada e historial de cierres. Los datos y dónde se guardan
  * (este navegador o el servidor compartido) los maneja el motor: aquí solo se
  * traduce cada acción de la pantalla a una operación (ver sync/estado.js).
@@ -50,6 +56,15 @@ export function OrdersProvider({ children }) {
       if (pedido) ejecutar({ tipo: 'marcarPago', id, paid: !pedido.paid, at: Date.now() })
     },
     [orders, ejecutar],
+  )
+
+  /** Cocina: el pedido está listo para que el mesero lo recoja. */
+  const markReady = useCallback(
+    (id) => {
+      marcadosAqui.add(id)
+      return ejecutar({ tipo: 'marcarListo', id, at: Date.now() })
+    },
+    [ejecutar],
   )
 
   const dispatchOrder = useCallback(
@@ -113,6 +128,7 @@ export function OrdersProvider({ children }) {
       addOrder,
       dispatchOrder,
       reopenOrder,
+      markReady,
       togglePaid,
       removeOrder,
       clearDispatched,
@@ -126,6 +142,7 @@ export function OrdersProvider({ children }) {
       addOrder,
       dispatchOrder,
       reopenOrder,
+      markReady,
       togglePaid,
       removeOrder,
       clearDispatched,

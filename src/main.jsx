@@ -8,6 +8,10 @@ import { DisponibilidadProvider } from './store/disponibilidad'
 import { OrdersProvider } from './store/orders'
 import { TurnosProvider } from './store/turnos'
 import { MotorProvider } from './sync/MotorProvider'
+import { prepararSonido } from './utils/sonido'
+
+// El navegador no deja sonar nada hasta el primer toque: se desbloquea ahí.
+prepararSonido()
 import './index.css'
 
 createRoot(document.getElementById('root')).render(
