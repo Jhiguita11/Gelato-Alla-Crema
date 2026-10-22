@@ -80,15 +80,24 @@ export function aplicarOp(estado, op, { asignarCodigo = true } = {}) {
         p.status === 'pendiente' ? p : { ...p, status: 'pendiente', dispatchedAt: null },
       )
 
-    case 'borrarPedido': {
-      const pedidos = estado.pedidos.filter((p) => p.id !== op.id)
-      return pedidos.length === estado.pedidos.length ? estado : { ...estado, pedidos }
-    }
+    // Eliminar un pedido lo ANULA: deja de contar en la caja, pero queda
+    // registro de quién y cuándo (el admin lo ve en los reportes). Así nadie
+    // puede hacer desaparecer una venta cobrada.
+    case 'borrarPedido':
+      return cambiarPedido(estado, op.id, (p) =>
+        p.anuladoAt ? p : { ...p, anuladoAt: op.at ?? Date.now(), anuladoPor: op.por ?? null },
+      )
 
+    // "Limpiar" OCULTA de la lista los entregados Y cobrados, pero siguen
+    // contando en la caja (antes se borraban y la venta desaparecía del día).
     case 'limpiarDespachados': {
-      // Solo los entregados Y cobrados: el que todavía debe no se pierde.
-      const pedidos = estado.pedidos.filter((p) => !(p.status === 'despachado' && p.paid))
-      return pedidos.length === estado.pedidos.length ? estado : { ...estado, pedidos }
+      let cambio = false
+      const pedidos = estado.pedidos.map((p) => {
+        if (p.oculto || p.anuladoAt || p.status !== 'despachado' || !p.paid) return p
+        cambio = true
+        return { ...p, oculto: true }
+      })
+      return cambio ? { ...estado, pedidos } : estado
     }
 
     case 'cerrarCaja': {

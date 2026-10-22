@@ -72,13 +72,21 @@ describe('operaciones sobre pedidos', () => {
     expect(aplicarOp(base, { tipo: 'borrarPedido', id: 'zzz' })).toBe(base)
   })
 
-  it('limpiar se lleva solo los despachados Y pagados', () => {
+  it('limpiar OCULTA solo los despachados Y pagados (no los borra)', () => {
     let e = estadoVacio()
     e = aplicarOp(e, { tipo: 'crearPedido', pedido: pedido('debe', { status: 'despachado' }) })
     e = aplicarOp(e, { tipo: 'crearPedido', pedido: pedido('listo', { status: 'despachado', paid: true }) })
     e = aplicarOp(e, { tipo: 'crearPedido', pedido: pedido('cocina', { paid: true }) })
-    e = aplicarOp(e, { tipo: 'limpiarDespachados' })
-    expect(e.pedidos.map((p) => p.id).sort()).toEqual(['cocina', 'debe'])
+    const limpio = aplicarOp(e, { tipo: 'limpiarDespachados' })
+    expect(limpio.pedidos).toHaveLength(3) // ninguna venta desaparece
+    expect(limpio.pedidos.filter((p) => p.oculto).map((p) => p.id)).toEqual(['listo'])
+    expect(aplicarOp(limpio, { tipo: 'limpiarDespachados' })).toBe(limpio)
+  })
+
+  it('eliminar ANULA: queda quién y cuándo, y es idempotente', () => {
+    const a = aplicarOp(base, { tipo: 'borrarPedido', id: 'a', at: 50, por: 'Gloria' })
+    expect(a.pedidos[0]).toMatchObject({ id: 'a', anuladoAt: 50, anuladoPor: 'Gloria' })
+    expect(aplicarOp(a, { tipo: 'borrarPedido', id: 'a', at: 99, por: 'Otra' })).toBe(a)
   })
 })
 

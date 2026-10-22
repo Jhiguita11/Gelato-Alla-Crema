@@ -1,5 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
+import { Dato, Ranking } from '../components/Cifras'
 import ComprobanteCierre from '../components/ComprobanteCierre'
+import Reportes from '../components/Reportes'
+import { useMotor } from '../sync/MotorProvider'
 import { formatCOP } from '../data/menu'
 import { useOrders } from '../store/orders'
 import { useTurnos } from '../store/turnos'
@@ -17,9 +20,179 @@ import {
 /**
  * Cuenta del día: lo vendido desde que se abrió hasta que se cierra la caja.
  * Al cerrar, el resumen pasa al historial y la numeración vuelve a #001.
+ *
+ * Las cifras son solo del administrador. El personal ve cuántos pedidos faltan
+ * por despachar o cobrar y puede cerrar la caja, pero sin montos. En modo
+ * compartido la base de datos hace cumplir esto: el personal no puede leer el
+ * historial ni los días anteriores aunque lo intente por fuera de la app.
  */
 export default function Caja() {
-  const { orders, cierres, cerrarCaja, importarCierres } = useOrders()
+  const { rol } = useMotor()
+  return rol === 'admin' ? <CajaAdmin /> : <CajaPersonal />
+}
+
+/**
+ * Confirma y cierra la caja. Con `conMontos` los avisos dicen cuánta plata
+ * queda sin cobrar; sin él, solo cuántos pedidos (para el personal).
+ */
+function confirmarCierre(r, { conMontos }) {
+  if (r.pendientes > 0) {
+    const sigue = confirm(
+      `Todavía hay ${r.pendientes} ${r.pendientes === 1 ? 'pedido' : 'pedidos'} sin despachar.\n\n` +
+        '¿Cerrar la caja de todas formas?',
+    )
+    if (!sigue) return false
+  }
+
+  if (r.sinPagar > 0) {
+    const sigue = confirm(
+      `Quedan ${r.sinPagar} ${r.sinPagar === 1 ? 'pedido' : 'pedidos'} sin cobrar` +
+        (conMontos ? `, por ${formatCOP(r.porCobrar)}` : '') +
+        '.\n\nSi cierras, quedan registrados como no cobrados. ¿Seguir?',
+    )
+    if (!sigue) return false
+  }
+
+  return confirm(
+    (conMontos
+      ? `Se va a cerrar el día con ${formatCOP(r.total)} en ${r.pedidos} pedidos.`
+      : `Se va a cerrar el día con ${r.pedidos} ${r.pedidos === 1 ? 'pedido' : 'pedidos'}.`) +
+      '\n\nLos pedidos se archivan y la numeración vuelve a #001.',
+  )
+}
+
+/** Lo que ve el personal: sin cifras de plata. */
+function CajaPersonal() {
+  const { todos, cerrarCaja } = useOrders()
+  const { turnos } = useTurnos()
+  const { admin } = useMotor()
+  const [cerrado, setCerrado] = useState(false)
+  const r = useMemo(() => resumenDelDia(todos, turnos), [todos, turnos])
+  const hayMovimiento = r.pedidos > 0
+
+  function intentarCierre() {
+    if (!hayMovimiento || !confirmarCierre(r, { conMontos: false })) return
+    cerrarCaja(r)
+    setCerrado(true)
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl px-4 pb-16 pt-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="font-display text-2xl font-bold text-cacao-900">Caja del día</h2>
+          <p className="mt-1 text-sm text-cacao-800/60">
+            {r.desde
+              ? `Abierta desde las ${hora(r.desde)} · ${fechaLarga(r.desde)}`
+              : 'Todavía no se ha vendido nada hoy.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={intentarCierre}
+          disabled={!hayMovimiento}
+          className="rounded-2xl bg-cacao-900 px-6 py-3.5 text-sm font-bold text-crema-50 shadow-lg shadow-cacao-900/15 transition enabled:hover:bg-cacao-800 disabled:cursor-not-allowed disabled:bg-crema-200 disabled:text-cacao-900/35 disabled:shadow-none"
+        >
+          Cerrar caja
+        </button>
+      </div>
+
+      {cerrado && !hayMovimiento && (
+        <p className="animar-entrada mt-5 rounded-2xl border-2 border-menta-500 bg-menta-100 px-4 py-3 text-sm font-medium text-cacao-900">
+          ✓ Caja cerrada. El documento del día lo ve el administrador.
+        </p>
+      )}
+
+      <section className="mt-6 grid grid-cols-3 gap-3">
+        <Dato valor={r.pedidos} etiqueta={r.pedidos === 1 ? 'Pedido' : 'Pedidos'} />
+        <Dato valor={r.pendientes} etiqueta="Sin despachar" acento="cacao" />
+        <Dato valor={r.sinPagar} etiqueta="Sin cobrar" acento="cacao" />
+      </section>
+
+      <p className="mt-6 rounded-2xl bg-crema-100 px-4 py-3 text-sm text-cacao-800/70">
+        Las cifras de venta, el historial y los reportes los ve solo el administrador.
+      </p>
+
+      {admin.disponible && <EntrarAdmin onEntrar={admin.entrar} />}
+    </div>
+  )
+}
+
+/** Formulario para pasar este celular a la cuenta del administrador. */
+function EntrarAdmin({ onEntrar }) {
+  const [abierto, setAbierto] = useState(false)
+  const [clave, setClave] = useState('')
+  const [error, setError] = useState(null)
+  const [enviando, setEnviando] = useState(false)
+
+  async function enviar(event) {
+    event.preventDefault()
+    if (!clave || enviando) return
+    setEnviando(true)
+    setError(null)
+    const problema = await onEntrar(clave)
+    setEnviando(false)
+    if (problema) {
+      setError(problema)
+      setClave('')
+    }
+  }
+
+  if (!abierto) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAbierto(true)}
+        className="mt-8 text-sm font-semibold text-menta-700 underline-offset-4 hover:underline"
+      >
+        Entrar como administrador
+      </button>
+    )
+  }
+
+  return (
+    <form onSubmit={enviar} className="mt-8 max-w-sm rounded-2xl border-2 border-crema-200 bg-white p-4">
+      <label htmlFor="clave-admin" className="text-sm font-semibold text-cacao-900">
+        Contraseña del administrador
+      </label>
+      <input
+        id="clave-admin"
+        type="password"
+        autoComplete="current-password"
+        autoFocus
+        value={clave}
+        onChange={(e) => setClave(e.target.value)}
+        className="mt-2 w-full rounded-xl border-2 border-crema-200 px-3 py-2.5 text-cacao-900 outline-none focus:border-menta-500"
+      />
+      {error && (
+        <p role="alert" className="mt-2 text-sm font-medium text-cono-600">
+          {error}
+        </p>
+      )}
+      <div className="mt-3 flex gap-2">
+        <button
+          type="submit"
+          disabled={!clave || enviando}
+          className="rounded-xl bg-menta-700 px-4 py-2.5 text-sm font-bold text-crema-50 disabled:opacity-40"
+        >
+          {enviando ? 'Entrando…' : 'Entrar'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setAbierto(false)}
+          className="rounded-xl px-4 py-2.5 text-sm font-semibold text-cacao-800/60"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  )
+}
+
+/** Lo que ve el administrador: todo. */
+function CajaAdmin() {
+  const { todos, cierres, cerrarCaja, importarCierres } = useOrders()
+  const { admin, sync } = useMotor()
   const { turnos } = useTurnos()
   // Se guardan ids y no copias: el cierre sale del historial. En modo
   // compartido, si el servidor rechaza el cierre (otro celular cerró primero),
@@ -30,34 +203,11 @@ export default function Caja() {
   const ultimoCierre = cierres.find((c) => c.id === ultimoCierreId) ?? null
   const comprobante = cierres.find((c) => c.id === comprobanteId) ?? null
 
-  const r = useMemo(() => resumenDelDia(orders, turnos), [orders, turnos])
-  const hayMovimiento = orders.length > 0
+  const r = useMemo(() => resumenDelDia(todos, turnos), [todos, turnos])
+  const hayMovimiento = r.pedidos > 0
 
   function intentarCierre() {
-    if (!hayMovimiento) return
-
-    if (r.pendientes > 0) {
-      const sigue = confirm(
-        `Todavía hay ${r.pendientes} ${r.pendientes === 1 ? 'pedido' : 'pedidos'} sin despachar.\n\n` +
-          '¿Cerrar la caja de todas formas?',
-      )
-      if (!sigue) return
-    }
-
-    if (r.sinPagar > 0) {
-      const sigue = confirm(
-        `Quedan ${r.sinPagar} ${r.sinPagar === 1 ? 'pedido' : 'pedidos'} sin cobrar, ` +
-          `por ${formatCOP(r.porCobrar)}.\n\n` +
-          'Si cierras, esa plata queda registrada como no cobrada. ¿Seguir?',
-      )
-      if (!sigue) return
-    }
-
-    const confirmado = confirm(
-      `Se va a cerrar el día con ${formatCOP(r.total)} en ${r.pedidos} pedidos.\n\n` +
-        'Los pedidos se archivan en el historial y la numeración vuelve a #001.',
-    )
-    if (!confirmado) return
+    if (!hayMovimiento || !confirmarCierre(r, { conMontos: true })) return
 
     // Archiva el día, reinicia la numeración y los turnos de quien siga conectado.
     const cierre = cerrarCaja(r)
@@ -69,7 +219,14 @@ export default function Caja() {
     <div className="mx-auto max-w-7xl px-4 pb-16 pt-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="font-display text-2xl font-bold text-cacao-900">Caja del día</h2>
+          <h2 className="flex items-center gap-2 font-display text-2xl font-bold text-cacao-900">
+            Caja del día
+            {admin.disponible && (
+              <span className="rounded-full bg-cacao-900 px-2.5 py-0.5 font-sans text-[11px] font-bold uppercase tracking-wide text-crema-50">
+                Admin
+              </span>
+            )}
+          </h2>
           <p className="mt-1 text-sm text-cacao-800/60">
             {r.desde
               ? `Abierta desde las ${hora(r.desde)} · ${fechaLarga(r.desde)}`
@@ -117,6 +274,12 @@ export default function Caja() {
           <Dato valor={r.pedidos} etiqueta={r.pedidos === 1 ? 'Pedido' : 'Pedidos'} />
           <Dato valor={r.porcionesTotales} etiqueta="Porciones de helado" />
         </div>
+        {r.anulados > 0 && (
+          <p className="mt-4 text-sm text-cacao-800/70">
+            Anulados hoy: {r.anulados} {r.anulados === 1 ? 'pedido' : 'pedidos'} por{' '}
+            {formatCOP(r.totalAnulado)} (no cuentan en el total).
+          </p>
+        )}
       </section>
 
       {!hayMovimiento ? (
@@ -197,70 +360,29 @@ export default function Caja() {
         </section>
       )}
 
+      {admin.disponible && <Reportes cargarRango={admin.cargarRango} />}
+
       {cierres.length > 0 && <Historial cierres={cierres} onVerDocumento={(c) => setComprobanteId(c.id)} />}
 
-      <Respaldo cierres={cierres} onImportar={importarCierres} />
+      <Respaldo cierres={cierres} onImportar={importarCierres} compartido={sync.modo === 'compartido'} />
+
+      {admin.disponible && (
+        <button
+          type="button"
+          onClick={() => {
+            if (confirm('¿Salir de la cuenta del administrador?\n\nEste celular va a pedir el PIN del local.'))
+              admin.salir()
+          }}
+          className="mt-10 text-sm font-semibold text-terracota-600 underline-offset-4 hover:underline"
+        >
+          Salir de la cuenta de administrador
+        </button>
+      )}
 
       {comprobante && (
         <ComprobanteCierre cierre={comprobante} onCerrar={() => setComprobanteId(null)} />
       )}
     </div>
-  )
-}
-
-function Dato({ valor, etiqueta, acento }) {
-  const color =
-    acento === 'menta' ? 'text-menta-700' : acento === 'cacao' ? 'text-cono-600' : 'text-cacao-900'
-  return (
-    <div className="rounded-2xl bg-crema-50 px-4 py-3">
-      <p className={`font-display text-xl font-bold leading-tight ${color}`}>{valor}</p>
-      <p className="mt-0.5 text-xs font-medium uppercase tracking-wide text-cacao-800/50">
-        {etiqueta}
-      </p>
-    </div>
-  )
-}
-
-/**
- * Lista ordenada con barra de magnitud. Un solo tono, porque lo que se compara
- * es cuánto — no quién: la identidad ya la lleva el nombre de cada fila.
- */
-function Ranking({ titulo, nota, filas }) {
-  const max = Math.max(...filas.map((f) => f.valor), 1)
-
-  return (
-    <section className="rounded-3xl border-2 border-crema-200 bg-white p-5">
-      <h3 className="font-display text-lg font-bold text-cacao-900">{titulo}</h3>
-      <p className="mt-0.5 text-xs text-cacao-800/50">{nota}</p>
-
-      <ul className="mt-4 space-y-3">
-        {filas.map((fila) => (
-          <li key={fila.id}>
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-cacao-900">
-                {fila.color && (
-                  <span
-                    className="h-3.5 w-3.5 shrink-0 rounded-full border border-black/10"
-                    style={{ backgroundColor: fila.color }}
-                    aria-hidden="true"
-                  />
-                )}
-                <span className="truncate">{fila.etiqueta}</span>
-              </span>
-              <span className="shrink-0 text-sm font-semibold tabular-nums text-cacao-800/70">
-                {fila.texto}
-              </span>
-            </div>
-            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-crema-100">
-              <div
-                className="h-full rounded-r-[4px] bg-menta-500"
-                style={{ width: `${Math.max((fila.valor / max) * 100, 3)}%` }}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
   )
 }
 
@@ -354,7 +476,7 @@ function Historial({ cierres, onVerDocumento }) {
  * Copia de seguridad del historial. El historial solo existe en este
  * navegador: si se borran los datos o se cambia de celular, se pierde.
  */
-function Respaldo({ cierres, onImportar }) {
+function Respaldo({ cierres, onImportar, compartido }) {
   const entrada = useRef(null)
   const [mensaje, setMensaje] = useState(null)
   const hayCierres = cierres.length > 0
@@ -399,8 +521,9 @@ function Respaldo({ cierres, onImportar }) {
     <section className="mt-10 rounded-3xl border-2 border-dashed border-crema-200 px-5 py-5">
       <h3 className="font-display text-lg font-bold text-cacao-900">Copia de seguridad</h3>
       <p className="mt-1 max-w-2xl text-sm text-cacao-800/60">
-        El historial de cierres solo se guarda en este navegador. Descarga una copia de vez en
-        cuando: si se borran los datos o se cambia de celular, se puede volver a cargar.
+        {compartido
+          ? 'El historial está en el servidor. Igual conviene descargar una copia de vez en cuando; también sirve para subir cierres de antes del modo compartido.'
+          : 'El historial de cierres solo se guarda en este navegador. Descarga una copia de vez en cuando: si se borran los datos o se cambia de celular, se puede volver a cargar.'}
       </p>
 
       <div className="mt-4 flex flex-wrap gap-2">

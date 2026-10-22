@@ -24,6 +24,9 @@ describe('conversión de filas', () => {
       creado_at: '2026-10-22T15:00:00+00:00',
       despachado_at: '2026-10-22T15:10:00+00:00',
       pagado_at: null,
+      oculto: true,
+      anulado_at: '2026-10-22T15:20:00+00:00',
+      anulado_por: 'Fredy',
     })
     expect(p).toEqual({
       id: 'a',
@@ -39,6 +42,9 @@ describe('conversión de filas', () => {
       createdAt: Date.parse('2026-10-22T15:00:00Z'),
       dispatchedAt: Date.parse('2026-10-22T15:10:00Z'),
       paidAt: null,
+      oculto: true,
+      anuladoAt: Date.parse('2026-10-22T15:20:00Z'),
+      anuladoPor: 'Fredy',
     })
   })
 

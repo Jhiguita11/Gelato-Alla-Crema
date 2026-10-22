@@ -306,15 +306,57 @@ después piden el PIN nuevo.
 Para probar el modo compartido en desarrollo: `bun run dev --mode production`
 (usa la base real) o `VITE_SUPABASE_URL=… VITE_SUPABASE_ANON_KEY=… bun run dev`.
 
+### Personal y administrador
+
+En modo compartido hay dos cuentas:
+
+| | Personal (PIN) | Administrador (contraseña) |
+| --- | --- | --- |
+| Tomar, despachar, cobrar, anular pedidos | ✅ | ✅ |
+| Precio de cada pedido | ✅ | ✅ |
+| Totales del día, "por cobrar", rankings | ❌ | ✅ |
+| Cerrar caja | ✅ (sin montos, sin documento) | ✅ |
+| Historial, documentos, respaldo, Excel | ❌ | ✅ |
+| Pedidos de días anteriores | ❌ | ✅ |
+| **Reportes** por rango de fechas | ❌ | ✅ |
+
+Lo histórico (cierres, días anteriores, reportes) lo bloquea **la base de
+datos**: el personal no lo puede leer ni pidiéndolo por fuera de la app. Los
+totales del día en curso solo se ocultan en pantalla, porque el personal
+necesita ver el precio de cada pedido para cobrarlo.
+
+- **Anular** un pedido no lo borra: deja de contar, pero queda quién y cuándo,
+  y el admin lo ve en la Caja y en los reportes.
+- **Limpiar despachados y pagados** solo los quita de la lista: siguen
+  contando en la caja (antes la venta desaparecía del día).
+- El admin entra con *Soy el administrador* en la pantalla del PIN, o con
+  *Caja → Entrar como administrador* desde un celular del local. Al salir, el
+  celular vuelve a pedir el PIN y se borra de él el historial que había
+  bajado.
+
+**Crear el administrador**: en Supabase, *Authentication → Users → Add user*
+con `admin@gelatoallacrema.app` y una contraseña fuerte (*Auto Confirm*), y
+después en *SQL Editor*:
+
+```sql
+update auth.users
+   set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"rol":"admin"}'
+ where email = 'admin@gelatoallacrema.app';
+```
+
+Lo que da el rol es `app_metadata.rol`, que solo se cambia desde el servidor:
+nadie puede volverse admin desde la app.
+
 ### Pruebas
 
 - `bun run test`: reducer, modo local (compatibilidad con los datos ya
   guardados), cola y conversión de datos, precios, caja y respaldo.
-- `scripts/probar-servidor.sh`: levanta un Postgres desechable con la
-  migración y PostgREST adelante, y corre
+- `scripts/probar-servidor.sh`: levanta un Postgres desechable con las
+  migraciones y PostgREST adelante, y corre
   [`src/__tests__/integracion.test.js`](src/__tests__/integracion.test.js), que
-  ejecuta cada operación contra el servidor y verifica que el resultado sea el
-  mismo que predice el reducer. Necesita Postgres y el binario de
+  ejecuta cada operación contra el servidor, verifica que el resultado sea el
+  mismo que predice el reducer y que la base haga cumplir los permisos de
+  personal, administrador y cualquier otra cuenta. Necesita Postgres y el binario de
   [PostgREST](https://github.com/PostgREST/postgrest/releases).
 
 ## App instalable y sin internet
