@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo } from 'react'
 import { FLAVORS, PRODUCTS } from '../data/menu'
+import { leer, useAlmacen } from './almacen'
 
 const STORAGE_KEY = 'gac.disponibilidad.v1'
 // Los sabores nuevos se guardan aparte del día: llegaron para quedarse.
@@ -11,7 +12,7 @@ const DisponibilidadContext = createContext(null)
 function aSlug(texto) {
   return texto
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
@@ -26,15 +27,6 @@ function hoy() {
   return `${d.getFullYear()}-${mes}-${dia}`
 }
 
-function leer(clave, porDefecto = null) {
-  try {
-    const raw = localStorage.getItem(clave)
-    return raw ? JSON.parse(raw) : porDefecto
-  } catch {
-    return porDefecto
-  }
-}
-
 /**
  * Catálogo completo de sabores sin pasar por React. Lo usa `describir.js`
  * para poder ponerle nombre a un sabor agregado desde la app cuando muestra
@@ -45,38 +37,22 @@ export function catalogoSabores() {
 }
 
 export function DisponibilidadProvider({ children }) {
-  const [estado, setEstado] = useState(() => leer(STORAGE_KEY))
-  const [extra, setExtra] = useState(() => leer(EXTRA_KEY, []))
-
-  useEffect(() => {
-    if (estado) localStorage.setItem(STORAGE_KEY, JSON.stringify(estado))
-  }, [estado])
-
-  useEffect(() => {
-    localStorage.setItem(EXTRA_KEY, JSON.stringify(extra))
-  }, [extra])
+  // Si la caja y la cocina están en pestañas distintas del mismo equipo, se
+  // enteran solas cuando alguien agota un sabor (ver store/almacen.js).
+  const [estado, setEstado] = useAlmacen(STORAGE_KEY, null)
+  const [extra, setExtra] = useAlmacen(EXTRA_KEY, [])
 
   /** Los 16 de la casa más los que se hayan agregado desde la app. */
-  const catalogo = useMemo(() => [...FLAVORS, ...extra], [extra])
-
-  // Si la caja y la cocina están en pestañas distintas del mismo equipo, que
-  // se enteren cuando alguien agota un sabor.
-  useEffect(() => {
-    const onStorage = (event) => {
-      if (event.key === STORAGE_KEY) setEstado(leer(STORAGE_KEY))
-      if (event.key === EXTRA_KEY) setExtra(leer(EXTRA_KEY, []))
-    }
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [])
+  const catalogo = useMemo(() => [...FLAVORS, ...(extra ?? [])], [extra])
 
   // Se vuelve a preguntar cuando cambia el día.
   const necesitaApertura = !estado || estado.fecha !== hoy()
 
   /** Arranca el día con los sabores que haya en la vitrina. */
-  const abrirDia = useCallback((saboresIds) => {
-    setEstado({ fecha: hoy(), sabores: saboresIds, productosAgotados: [] })
-  }, [])
+  const abrirDia = useCallback(
+    (saboresIds) => setEstado(() => ({ fecha: hoy(), sabores: saboresIds, productosAgotados: [] })),
+    [setEstado],
+  )
 
   const toggleSabor = useCallback((id) => {
     setEstado((prev) => {
@@ -87,7 +63,7 @@ export function DisponibilidadProvider({ children }) {
         sabores: activo ? prev.sabores.filter((s) => s !== id) : [...prev.sabores, id],
       }
     })
-  }, [])
+  }, [setEstado])
 
   const toggleProducto = useCallback((id) => {
     setEstado((prev) => {
@@ -100,10 +76,12 @@ export function DisponibilidadProvider({ children }) {
           : [...agotados, id],
       }
     })
-  }, [])
+  }, [setEstado])
 
   /** Fuerza volver a preguntar los sabores sin esperar al otro día. */
-  const reabrirDia = useCallback(() => setEstado(null), [])
+  // Borra la apertura guardada: antes solo se borraba en memoria y, al recargar,
+  // volvía la del día sin preguntar.
+  const reabrirDia = useCallback(() => setEstado(() => null), [setEstado])
 
   /**
    * Registra un sabor que llegó nuevo. Queda en el catálogo para siempre y
@@ -117,22 +95,35 @@ export function DisponibilidadProvider({ children }) {
 
       const id = aSlug(nombre)
       if (!id) return 'Ese nombre no sirve, prueba con otro.'
-      if ([...FLAVORS, ...extra].some((f) => f.id === id)) return `"${nombre}" ya está en la lista.`
 
-      setExtra((prev) => [...prev, { id, name: nombre, color }])
+      let error = null
+      setExtra((prev) => {
+        const lista = prev ?? []
+        if ([...FLAVORS, ...lista].some((f) => f.id === id)) {
+          error = `"${nombre}" ya está en la lista.`
+          return prev
+        }
+        return [...lista, { id, name: nombre, color }]
+      })
+      if (error) return error
       setEstado((prev) => (prev ? { ...prev, sabores: [...prev.sabores, id] } : prev))
       return null
     },
-    [extra],
+    [setExtra, setEstado],
   )
 
   /** Solo se pueden borrar los agregados desde la app; los de la casa se apagan. */
-  const eliminarSabor = useCallback((id) => {
-    setExtra((prev) => prev.filter((f) => f.id !== id))
-    setEstado((prev) => (prev ? { ...prev, sabores: prev.sabores.filter((s) => s !== id) } : prev))
-  }, [])
+  const eliminarSabor = useCallback(
+    (id) => {
+      setExtra((prev) => (prev ?? []).filter((f) => f.id !== id))
+      setEstado((prev) =>
+        prev ? { ...prev, sabores: prev.sabores.filter((s) => s !== id) } : prev,
+      )
+    },
+    [setExtra, setEstado],
+  )
 
-  const esPersonalizado = useCallback((id) => extra.some((f) => f.id === id), [extra])
+  const esPersonalizado = useCallback((id) => (extra ?? []).some((f) => f.id === id), [extra])
 
   const saboresActivos = useMemo(() => {
     if (!estado) return []
