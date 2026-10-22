@@ -142,7 +142,8 @@ export default function PedidosPendientes() {
               onReabrir={() => reopenOrder(pedido.id)}
               onTogglePago={() => togglePaid(pedido.id)}
               onEliminar={() => {
-                if (confirm(`¿Eliminar el pedido #${pedido.code}?`)) removeOrder(pedido.id)
+                if (confirm(`¿Eliminar el pedido ${pedido.code ? `#${pedido.code}` : 'sin número'}?`))
+                  removeOrder(pedido.id)
               }}
             />
           ))}
@@ -190,7 +191,14 @@ function TarjetaPedido({ pedido, onDespachar, onReabrir, onTogglePago, onElimina
         }`}
       >
         <div className="flex flex-wrap items-baseline gap-2">
-          <span className="font-display text-lg font-bold">#{pedido.code}</span>
+          {pedido.code ? (
+            <span className="font-display text-lg font-bold">#{pedido.code}</span>
+          ) : (
+            // Tomado sin internet: el número lo pone el servidor al subirlo.
+            <span className="font-display text-lg font-bold opacity-70" title="Por enviar">
+              #···
+            </span>
+          )}
           <span
             className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold ${
               despachado ? 'bg-crema-200 text-cacao-900' : 'bg-cono-500 text-white'
@@ -295,7 +303,7 @@ function TarjetaPedido({ pedido, onDespachar, onReabrir, onTogglePago, onElimina
             <button
               type="button"
               onClick={onEliminar}
-              aria-label={`Eliminar pedido ${pedido.code}`}
+              aria-label={`Eliminar pedido ${pedido.code ?? 'sin número'}`}
               className="rounded-xl border-2 border-crema-200 px-3 py-2.5 text-xs font-semibold text-terracota-600 transition hover:border-cono-500"
             >
               ✕

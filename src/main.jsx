@@ -7,17 +7,20 @@ import AvisoActualizacion from './components/AvisoActualizacion'
 import { DisponibilidadProvider } from './store/disponibilidad'
 import { OrdersProvider } from './store/orders'
 import { TurnosProvider } from './store/turnos'
+import { MotorProvider } from './sync/MotorProvider'
 import './index.css'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <TurnosProvider>
-      <DisponibilidadProvider>
-        <OrdersProvider>
-          <App />
-          <AvisoActualizacion />
-        </OrdersProvider>
-      </DisponibilidadProvider>
-    </TurnosProvider>
+    <MotorProvider>
+      <TurnosProvider>
+        <DisponibilidadProvider>
+          <OrdersProvider>
+            <App />
+          </OrdersProvider>
+        </DisponibilidadProvider>
+      </TurnosProvider>
+    </MotorProvider>
+    <AvisoActualizacion />
   </StrictMode>,
 )
