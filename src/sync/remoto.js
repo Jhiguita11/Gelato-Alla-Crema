@@ -26,6 +26,9 @@ export function filaAPedido(r) {
     createdAt: ms(r.creado_at),
     dispatchedAt: ms(r.despachado_at),
     paidAt: ms(r.pagado_at),
+    oculto: r.oculto ?? false,
+    anuladoAt: ms(r.anulado_at),
+    anuladoPor: r.anulado_por ?? null,
   }
 }
 
@@ -71,6 +74,7 @@ export class ErrorSync extends Error {
 }
 
 const MENSAJES = {
+  solo_admin: 'Eso solo lo puede hacer el administrador.',
   ya_cerrada: 'Otro celular ya cerró esta caja. Se actualizó con lo que hay ahora.',
   desactualizada:
     'Llegaron pedidos de otro celular mientras se cerraba la caja. Revisa la cuenta y vuelve a cerrar.',
@@ -172,7 +176,13 @@ export async function ejecutarRemoto(cliente, op) {
       await hecho(pedidos().update({ estado: 'pendiente', despachado_at: null }).eq('id', op.id))
       return null
     case 'borrarPedido':
-      await hecho(pedidos().delete().eq('id', op.id))
+      // Anular, no borrar: queda registro para el admin.
+      await hecho(
+        pedidos()
+          .update({ anulado_at: iso(op.at ?? Date.now()), anulado_por: op.por ?? null })
+          .eq('id', op.id)
+          .is('anulado_at', null),
+      )
       return null
     case 'limpiarDespachados':
       await rpc('limpiar_despachados')
@@ -239,6 +249,33 @@ export async function ejecutarRemoto(cliente, op) {
     default:
       throw new ErrorSync(`Operación desconocida: ${op.tipo}`)
   }
+}
+
+/**
+ * Pedidos y turnos de un rango de fechas, para los reportes del admin. Las
+ * reglas de la base solo se los dan al admin (el personal recibe solo los del
+ * día en curso). Se pide de a páginas: PostgREST corta en 1000 filas.
+ */
+export async function cargarRango(cliente, desde, hasta) {
+  const PAGINA = 1000
+  async function todas(tabla, columna) {
+    const filas = []
+    for (let i = 0; ; i += PAGINA) {
+      const lote = await hecho(
+        cliente
+          .from(tabla)
+          .select('*')
+          .gte(columna, iso(desde))
+          .lt(columna, iso(hasta))
+          .order(columna)
+          .range(i, i + PAGINA - 1),
+      )
+      filas.push(...lote)
+      if (lote.length < PAGINA) return filas
+    }
+  }
+  const [pedidos, turnos] = await Promise.all([todas('pedidos', 'creado_at'), todas('turnos', 'inicio')])
+  return { pedidos: pedidos.map(filaAPedido), turnos: turnos.map(filaATurno) }
 }
 
 /**

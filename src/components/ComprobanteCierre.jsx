@@ -7,7 +7,11 @@ import { hora } from '../utils/describir'
  * "Guardar PDF" se manda a imprimir: el navegador ofrece guardarlo como PDF
  * (en celular, además, compartirlo). Sin librerías ni servidor.
  */
-export default function ComprobanteCierre({ cierre, onCerrar }) {
+/**
+ * Documento imprimible. Sirve para un cierre de caja y, con `etiqueta` y
+ * `periodo`, para un reporte de un rango de fechas.
+ */
+export default function ComprobanteCierre({ cierre, onCerrar, etiqueta = 'Cierre de caja', periodo }) {
   return (
     <div className="fixed inset-0 z-[80] overflow-y-auto bg-cacao-900/60 p-0 backdrop-blur-sm sm:p-6">
       <div className="mx-auto w-full max-w-3xl">
@@ -49,14 +53,20 @@ export default function ComprobanteCierre({ cierre, onCerrar }) {
             />
             <div className="min-w-0 flex-1">
               <h1 className="font-display text-2xl font-bold leading-tight">Gelato Alla Crema</h1>
-              <p className="text-sm text-cacao-800/60">Cierre de caja</p>
+              <p className="text-sm text-cacao-800/60">{etiqueta}</p>
             </div>
             <div className="text-right text-sm">
-              <p className="font-semibold first-letter:uppercase">{fechaLarga(cierre.cerradoAt)}</p>
-              <p className="text-cacao-800/60">
-                {cierre.abiertoAt ? `${hora(cierre.abiertoAt)} — ` : ''}
-                {hora(cierre.cerradoAt)}
-              </p>
+              {periodo ? (
+                <p className="font-semibold">{periodo}</p>
+              ) : (
+                <>
+                  <p className="font-semibold first-letter:uppercase">{fechaLarga(cierre.cerradoAt)}</p>
+                  <p className="text-cacao-800/60">
+                    {cierre.abiertoAt ? `${hora(cierre.abiertoAt)} — ` : ''}
+                    {hora(cierre.cerradoAt)}
+                  </p>
+                </>
+              )}
             </div>
           </header>
 
@@ -81,6 +91,12 @@ export default function ComprobanteCierre({ cierre, onCerrar }) {
               <p className="mt-4 rounded-xl border-2 border-cacao-600 bg-cacao-100 px-3 py-2 text-sm font-medium">
                 Quedaron {formatCOP(cierre.porCobrar)} sin cobrar en {cierre.sinPagar}{' '}
                 {cierre.sinPagar === 1 ? 'pedido' : 'pedidos'}.
+              </p>
+            )}
+            {cierre.anulados > 0 && (
+              <p className="mt-3 rounded-xl border-2 border-crema-200 px-3 py-2 text-sm">
+                Se anularon {cierre.anulados} {cierre.anulados === 1 ? 'pedido' : 'pedidos'} por{' '}
+                {formatCOP(cierre.totalAnulado)}. No cuentan en el total.
               </p>
             )}
           </section>

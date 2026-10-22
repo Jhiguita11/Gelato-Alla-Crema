@@ -75,6 +75,19 @@ describe('resumenDelDia', () => {
     expect(r.personas[0]).toMatchObject({ persona: 'Mariana', mesas: 2, pedidos: 3 })
   })
 
+  it('los anulados no cuentan pero se reportan; los ocultos sí cuentan', () => {
+    const uno = { productId: 'cono-vaso-canasta', varianteId: 'x1', flavorIds: ['frutos-rojos'] }
+    const r = resumenDelDia([
+      pedido([uno], { paid: true, status: 'despachado', oculto: true }),
+      pedido([{ ...uno, quantity: 2 }], { anuladoAt: 5, anuladoPor: 'Fredy' }),
+    ])
+    expect(r.pedidos).toBe(1)
+    expect(r.total).toBe(3500)
+    expect(r.porcionesTotales).toBe(1)
+    expect(r.anulados).toBe(1)
+    expect(r.totalAnulado).toBe(7000)
+  })
+
   it('un día sin pedidos queda en cero', () => {
     const r = resumenDelDia([])
     expect(r).toMatchObject({ pedidos: 0, total: 0, porcionesTotales: 0, desde: null })

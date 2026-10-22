@@ -10,8 +10,12 @@ const OrdersContext = createContext(null)
  * traduce cada acción de la pantalla a una operación (ver sync/estado.js).
  */
 export function OrdersProvider({ children }) {
-  const { estado, ejecutar } = useMotor()
-  const orders = estado.pedidos
+  const { estado, ejecutar, turnoActivo } = useMotor()
+  // `todos` incluye los anulados (para que el resumen los reporte aparte);
+  // `orders`, lo que existe para trabajar: sin anulados. Los "limpiados"
+  // (ocultos) siguen aquí porque cuentan en la caja; la lista los filtra.
+  const todos = estado.pedidos
+  const orders = useMemo(() => todos.filter((o) => !o.anuladoAt), [todos])
   const cierres = estado.cierres
 
   const addOrder = useCallback(
@@ -55,11 +59,15 @@ export function OrdersProvider({ children }) {
 
   const reopenOrder = useCallback((id) => ejecutar({ tipo: 'reabrir', id }), [ejecutar])
 
-  const removeOrder = useCallback((id) => ejecutar({ tipo: 'borrarPedido', id }), [ejecutar])
+  /** Anula el pedido: deja de contar, pero queda registro de quién y cuándo. */
+  const removeOrder = useCallback(
+    (id) => ejecutar({ tipo: 'borrarPedido', id, at: Date.now(), por: turnoActivo?.persona ?? null }),
+    [ejecutar, turnoActivo],
+  )
 
   /**
-   * Limpia los despachados, pero solo los que ya están pagados: un pedido
-   * entregado que todavía debe no se puede perder de la vista.
+   * Quita de la lista los despachados que ya están pagados (siguen contando en
+   * la caja). Un pedido entregado que todavía debe no se puede perder de vista.
    */
   const clearDispatched = useCallback(() => ejecutar({ tipo: 'limpiarDespachados' }), [ejecutar])
 
@@ -98,6 +106,7 @@ export function OrdersProvider({ children }) {
   const value = useMemo(
     () => ({
       orders,
+      todos,
       cierres,
       cerrarCaja,
       importarCierres,
@@ -110,6 +119,7 @@ export function OrdersProvider({ children }) {
     }),
     [
       orders,
+      todos,
       cierres,
       cerrarCaja,
       importarCierres,
