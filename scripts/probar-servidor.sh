@@ -77,16 +77,18 @@ http.createServer((req, res) => {
 PID_PROXY=$!
 sleep 1.5
 
+# token <email> [rol]: como los de Supabase, con app_metadata.rol si se da.
 token() {
   node -e "
 const c = require('crypto');
 const b = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
-const cuerpo = b({ alg: 'HS256', typ: 'JWT' }) + '.' + b({ role: 'authenticated', email: '$1', exp: Math.floor(Date.now()/1000) + 3600 });
+const cuerpo = b({ alg: 'HS256', typ: 'JWT' }) + '.' + b({ role: 'authenticated', email: '$1', app_metadata: '${2:-}' ? { rol: '${2:-}' } : {}, exp: Math.floor(Date.now()/1000) + 3600 });
 console.log(cuerpo + '.' + c.createHmac('sha256', '$SECRETO').update(cuerpo).digest('base64url'));
 "
 }
 
 GAC_REST_URL="http://localhost:$PROXY_PORT" \
 GAC_TOKEN_LOCAL=$(token local@gelatoallacrema.app) \
+GAC_TOKEN_ADMIN=$(token admin@gelatoallacrema.app admin) \
 GAC_TOKEN_INTRUSO=$(token intruso@ejemplo.com) \
   npx vitest run src/__tests__/integracion.test.js

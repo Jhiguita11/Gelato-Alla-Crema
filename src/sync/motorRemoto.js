@@ -21,6 +21,16 @@ const TURNO = 'gac.compartido.turno.v1' // quién está conectado en ESTE celula
 const REINTENTO_MAX_MS = 30_000
 const REFRESCO_MS = 60_000 // red de seguridad por si se pierde un aviso de tiempo real
 
+/**
+ * Al salir de la cuenta del admin en un celular del local: borra de la caché
+ * lo que solo el admin puede ver (el historial), para que no quede guardado
+ * en ese teléfono.
+ */
+export function olvidarDatosDeAdmin() {
+  const cache = leer(CACHE, null)
+  if (cache?.cierres?.length) escribir(CACHE, { ...cache, cierres: [] })
+}
+
 export function useMotorRemoto(cliente, { alPerderSesion } = {}) {
   const [servidor, setServidor] = useState(() => leer(CACHE, null) ?? estadoVacio())
   const [cola, setCola] = useState(() => leer(COLA, []) ?? [])

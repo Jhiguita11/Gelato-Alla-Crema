@@ -18,4 +18,11 @@ export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
  */
 export const EMAIL_LOCAL = 'local@gelatoallacrema.app'
 
+/**
+ * La cuenta del administrador (contraseña, no PIN). Lo que la hace admin no es
+ * el email sino `app_metadata.rol = 'admin'`, que solo se pone desde el
+ * servidor (ver supabase/migrations/…_roles_admin.sql).
+ */
+export const EMAIL_ADMIN = 'admin@gelatoallacrema.app'
+
 export const MODO_COMPARTIDO = Boolean(SUPABASE_URL && SUPABASE_KEY)
