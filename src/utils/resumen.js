@@ -68,7 +68,9 @@ export function resumenDelDia(todos, turnos = []) {
   }
 
   const total = orders.reduce((s, o) => s + o.total, 0)
-  const cobrado = orders.filter((o) => o.paid).reduce((s, o) => s + o.total, 0)
+  // Un pedido al que la mesa le agregó algo puede estar pagado en parte
+  // (abonado): eso ya está en la caja.
+  const cobrado = orders.reduce((s, o) => s + (o.paid ? o.total : (o.abonado ?? 0)), 0)
 
   const porProducto = new Map()
   const porSabor = new Map()

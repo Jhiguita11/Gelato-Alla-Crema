@@ -4,16 +4,23 @@
  * suena por lo que ya estaba).
  */
 
-/** Pedidos en preparación que no estaban en la foto anterior. */
+/**
+ * Pedidos en preparación que no estaban en la foto anterior, o a los que la
+ * misma mesa les agregó una ronda nueva (rondaAt cambió): para cocina es
+ * trabajo nuevo igual.
+ */
 export function pedidosNuevos(anteriores, actuales) {
   if (!anteriores) return []
-  const vistos = new Set(anteriores.map((p) => p.id))
-  return actuales.filter((p) => p.status === 'pendiente' && !vistos.has(p.id))
+  const ronda = new Map(anteriores.map((p) => [p.id, p.rondaAt ?? null]))
+  return actuales.filter(
+    (p) => p.status === 'pendiente' && (!ronda.has(p.id) || (p.rondaAt ?? null) !== ronda.get(p.id)),
+  )
 }
 
 /**
  * Pedidos que acaban de pasar a "listo" y le tocan a `persona`: los que tomó
- * ella, o los que no tienen mesero asignado. No avisa de los que se marcaron
+ * ella (o a los que ella les agregó la última ronda), o los que no tienen
+ * mesero asignado. No avisa de los que se marcaron
  * listos en este mismo equipo (`propios`): quien lo marcó ya lo sabe.
  */
 export function pedidosListosPara(anteriores, actuales, persona, propios = new Set()) {
@@ -24,7 +31,7 @@ export function pedidosListosPara(anteriores, actuales, persona, propios = new S
       p.status === 'listo' &&
       antes.get(p.id) !== 'listo' &&
       !propios.has(p.id) &&
-      (!p.takenBy || p.takenBy === persona),
+      (!p.takenBy || p.takenBy === persona || p.rondaPor === persona),
   )
 }
 

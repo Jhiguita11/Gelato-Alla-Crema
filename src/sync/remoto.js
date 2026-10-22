@@ -30,6 +30,9 @@ export function filaAPedido(r) {
     oculto: r.oculto ?? false,
     anuladoAt: ms(r.anulado_at),
     anuladoPor: r.anulado_por ?? null,
+    abonado: r.abonado ?? null,
+    rondaAt: ms(r.ronda_at),
+    rondaPor: r.ronda_por ?? null,
   }
 }
 
@@ -185,10 +188,26 @@ export async function ejecutarRemoto(cliente, op) {
     case 'marcarPago':
       await hecho(
         pedidos()
-          .update({ pagado: op.paid, pagado_at: op.paid ? iso(op.at) : null })
+          .update({ pagado: op.paid, pagado_at: op.paid ? iso(op.at) : null, abonado: null })
           .eq('id', op.id),
       )
       return null
+    case 'agregarAPedido': {
+      const fila = await rpc('agregar_al_pedido', {
+        p_id: op.id,
+        p_lineas: op.lineas,
+        p_monto: op.monto,
+        p_pagado: !!op.pagado,
+        p_at: iso(op.at),
+        p_por: op.por ?? null,
+        p_nota: op.nota ?? '',
+      })
+      const pedido = filaAPedido(fila)
+      return (estado) => ({
+        ...estado,
+        pedidos: estado.pedidos.map((p) => (p.id === pedido.id ? pedido : p)),
+      })
+    }
     case 'marcarListo':
       // Solo si sigue en preparación (igual que el reducer): si otro celular ya
       // lo entregó, no lo devuelve a "listo".

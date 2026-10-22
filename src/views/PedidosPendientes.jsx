@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useSonidoBloqueado, useSonidoPedidosNuevos } from '../components/AvisosPedidos'
 import { formatCOP } from '../data/menu'
 import { useOrders } from '../store/orders'
@@ -25,7 +25,12 @@ const FILTROS = [
   { id: 'todos', label: 'Todos', test: () => true },
 ]
 
-const porLlegada = (a, b) => a.createdAt - b.createdAt
+// Hora en que el pedido entró a la cola. Si la misma mesa agregó algo, cuenta
+// la hora de esa ronda: es trabajo nuevo y va detrás de lo que ya esperaba.
+const llegada = (o) => o.rondaAt ?? o.createdAt
+const porLlegada = (a, b) => llegada(a) - llegada(b)
+// Lo que falta por cobrar de un pedido (descontando lo que ya abonaron).
+const deuda = (o) => (o.paid ? 0 : o.total - (o.abonado ?? 0))
 
 export default function PedidosPendientes() {
   const {
@@ -73,7 +78,7 @@ export default function PedidosPendientes() {
     return orders.filter(test).sort(porLlegada)
   }, [orders, filtro])
 
-  const porCobrar = orders.filter((o) => !o.paid).reduce((sum, o) => sum + o.total, 0)
+  const porCobrar = orders.reduce((sum, o) => sum + deuda(o), 0)
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-16 pt-6">
@@ -319,7 +324,7 @@ function ChipSabor({ sabor }) {
   )
 }
 
-function LineaComanda({ linea }) {
+function LineaComanda({ linea, estado }) {
   const d = describirLinea(linea)
   // "Cono, vaso o canasta" no le dice a cocina qué servir: si se eligió el
   // recipiente, ese es el título ("Vaso · 3 porciones"). Las demás opciones
@@ -333,6 +338,25 @@ function LineaComanda({ linea }) {
     ...d.extras.map((e) => `${e.etiqueta}: ${e.valor}`),
     d.adiciones.length > 0 && `Adición: ${d.adiciones.join(', ')}`,
   ].filter(Boolean)
+
+  // Ya entregada (de una ronda anterior): una sola línea tachada, para que
+  // cocina vea qué llevaba la mesa sin confundirla con lo que hay que hacer.
+  if (estado === 'entregada') {
+    return (
+      <li className="flex items-center gap-3 text-cacao-800/45">
+        <span className="w-8 text-center text-xl leading-none opacity-50 grayscale" aria-hidden="true">
+          {d.icono}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-base font-semibold line-through decoration-2">
+          {d.cantidad} × {titulo}
+          {d.porciones && ` · ${d.porciones}`}
+        </span>
+        <span className="shrink-0 rounded-full bg-menta-100 px-2 py-0.5 text-[11px] font-bold uppercase text-menta-700">
+          ✓ Entregado
+        </span>
+      </li>
+    )
+  }
 
   return (
     <li className="flex items-start gap-3">
@@ -371,6 +395,11 @@ function LineaComanda({ linea }) {
         {encima.length > 0 && (
           <p className="mt-2 text-base font-medium text-cacao-800/75">{encima.join(' · ')}</p>
         )}
+        {estado === 'lista' && (
+          <p className="mt-2 inline-block rounded-full bg-menta-100 px-2.5 py-1 text-xs font-bold text-menta-700">
+            ✓ Ya estaba lista · no repetir
+          </p>
+        )}
       </div>
     </li>
   )
@@ -390,7 +419,7 @@ function TarjetaPedido({
   const enPreparacion = pedido.status === 'pendiente'
   const listo = pedido.status === 'listo'
   const entregado = pedido.status === 'despachado'
-  const e = espera(pedido.createdAt, ahora)
+  const e = espera(llegada(pedido), ahora)
   const paraLlevar = pedido.table === 'Para llevar'
 
   return (
@@ -466,9 +495,30 @@ function TarjetaPedido({
       {/* 2 · Qué preparar */}
       <div className="flex-1 px-5 pb-4 pt-3">
         <ul className="space-y-4">
-          {pedido.lines.map((linea, i) => (
-            <LineaComanda key={linea.uid ?? i} linea={linea} />
-          ))}
+          {pedido.lines.map((linea, i) => {
+            // Lo agregado en la última ronda lleva un separador antes.
+            const nueva = pedido.rondaAt && linea.agregadaAt === pedido.rondaAt
+            const primeraNueva = nueva && pedido.lines[i - 1]?.agregadaAt !== pedido.rondaAt
+            return (
+              <Fragment key={linea.uid ?? i}>
+                {primeraNueva && (
+                  <li
+                    aria-hidden="true"
+                    className="flex items-center gap-2 pt-1 text-xs font-bold uppercase tracking-wide text-cono-600"
+                  >
+                    <span className="h-0.5 flex-1 rounded-full bg-cono-500/40" />
+                    ➕ Agregado {hora(pedido.rondaAt)}
+                    {pedido.rondaPor && ` · ${pedido.rondaPor}`}
+                    <span className="h-0.5 flex-1 rounded-full bg-cono-500/40" />
+                  </li>
+                )}
+                <LineaComanda
+                  linea={linea}
+                  estado={linea.entregadaAt ? 'entregada' : linea.listaAt ? 'lista' : nueva ? 'nueva' : null}
+                />
+              </Fragment>
+            )
+          })}
         </ul>
 
         {pedido.note && (
@@ -566,7 +616,13 @@ function TarjetaPedido({
                 : 'border-terracota-600 bg-terracota-100 text-terracota-600 hover:border-menta-500'
             }`}
           >
-            {pedido.paid ? `✓ Pagado ${formatCOP(pedido.total)}` : `Debe ${formatCOP(pedido.total)}`}
+            {pedido.paid ? `✓ Pagado ${formatCOP(pedido.total)}` : `Debe ${formatCOP(deuda(pedido))}`}
+            {/* Ya pagaron una parte (lo de antes de agregar): se ve cuánto. */}
+            {!pedido.paid && pedido.abonado > 0 && (
+              <span className="block text-[11px] font-semibold leading-tight opacity-75">
+                pagó {formatCOP(pedido.abonado)} de {formatCOP(pedido.total)}
+              </span>
+            )}
           </button>
         </div>
       </footer>

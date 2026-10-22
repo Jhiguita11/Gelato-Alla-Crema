@@ -137,11 +137,13 @@ export default function App() {
       <main>
         {vista === 'nuevo' && (
           <NuevoPedido
-            onEnviado={(pedido) =>
+            onEnviado={(pedido, { agregado } = {}) =>
               setAviso(
-                pedido.code
-                  ? `Pedido #${pedido.code} enviado · Mesa ${pedido.table}`
-                  : `Pedido enviado · Mesa ${pedido.table}`,
+                agregado
+                  ? `Agregado al pedido${pedido.code ? ` #${pedido.code}` : ''} · Mesa ${pedido.table}`
+                  : pedido.code
+                    ? `Pedido #${pedido.code} enviado · Mesa ${pedido.table}`
+                    : `Pedido enviado · Mesa ${pedido.table}`,
               )
             }
           />
