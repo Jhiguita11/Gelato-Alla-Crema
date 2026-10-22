@@ -17,6 +17,7 @@ create or replace function public.es_local()
 returns boolean
 language sql
 stable
+set search_path = ''
 as $$
   select coalesce(auth.jwt() ->> 'email', '') = 'local@gelatoallacrema.app'
 $$;
@@ -37,6 +38,7 @@ create or replace function public.jornada_actual()
 returns uuid
 language sql
 stable
+set search_path = ''
 as $$
   select jornada_id from public.jornada where id = 1
 $$;
@@ -105,16 +107,17 @@ alter table public.turnos  enable row level security;
 alter table public.cierres enable row level security;
 alter table public.vitrina enable row level security;
 
+-- (select …) hace que Postgres evalúe la regla una vez por consulta, no por fila.
 create policy "solo el local" on public.jornada for all to authenticated
-  using (public.es_local()) with check (public.es_local());
+  using ((select public.es_local())) with check ((select public.es_local()));
 create policy "solo el local" on public.pedidos for all to authenticated
-  using (public.es_local()) with check (public.es_local());
+  using ((select public.es_local())) with check ((select public.es_local()));
 create policy "solo el local" on public.turnos for all to authenticated
-  using (public.es_local()) with check (public.es_local());
+  using ((select public.es_local())) with check ((select public.es_local()));
 create policy "solo el local" on public.cierres for all to authenticated
-  using (public.es_local()) with check (public.es_local());
+  using ((select public.es_local())) with check ((select public.es_local()));
 create policy "solo el local" on public.vitrina for all to authenticated
-  using (public.es_local()) with check (public.es_local());
+  using ((select public.es_local())) with check ((select public.es_local()));
 
 revoke all on public.jornada, public.pedidos, public.turnos, public.cierres, public.vitrina
   from anon;
@@ -129,6 +132,7 @@ create or replace function public.exigir_local()
 returns void
 language plpgsql
 stable
+set search_path = ''
 as $$
 begin
   if not public.es_local() then
@@ -142,6 +146,7 @@ $$;
 create or replace function public.crear_pedido(p jsonb)
 returns public.pedidos
 language plpgsql
+set search_path = ''
 as $$
 declare
   existente public.pedidos;
@@ -187,6 +192,7 @@ $$;
 create or replace function public.limpiar_despachados()
 returns void
 language plpgsql
+set search_path = ''
 as $$
 begin
   perform public.exigir_local();
@@ -212,6 +218,7 @@ create or replace function public.cerrar_caja(
 )
 returns public.cierres
 language plpgsql
+set search_path = ''
 as $$
 declare
   j        public.jornada;
@@ -255,6 +262,7 @@ $$;
 create or replace function public.entrar(p_id uuid, p_persona text, p_inicio timestamptz)
 returns void
 language plpgsql
+set search_path = ''
 as $$
 begin
   perform public.exigir_local();
@@ -269,6 +277,7 @@ $$;
 create or replace function public.vitrina_marcar(p_lista text, p_valor text, p_activo boolean)
 returns void
 language plpgsql
+set search_path = ''
 as $$
 begin
   perform public.exigir_local();
@@ -298,6 +307,7 @@ $$;
 create or replace function public.agregar_sabor_extra(p jsonb)
 returns void
 language plpgsql
+set search_path = ''
 as $$
 begin
   perform public.exigir_local();
@@ -318,6 +328,7 @@ $$;
 create or replace function public.eliminar_sabor_extra(p_id text)
 returns void
 language plpgsql
+set search_path = ''
 as $$
 begin
   perform public.exigir_local();
