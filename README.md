@@ -292,17 +292,19 @@ duplicar nada.
 3. **Cerrar registros**: en *Authentication → Sign In / Providers*, desactivar
    *Allow new users to sign up*. (Aunque alguien lograra crear otra cuenta, las
    reglas de la base solo dejan entrar al email del local.)
-4. **Conectar la app**: en GitHub, *Settings → Secrets and variables → Actions
-   → Variables*, crear `SUPABASE_URL` y `SUPABASE_ANON_KEY` con los valores de
-   *Project Settings → API* (la clave **anon / publishable**, nunca la
-   `service_role`). Volver a correr el deploy (*Actions → Publicar en GitHub
-   Pages → Run workflow*).
+4. **Conectar la app**: poner la URL y la clave **anon / publishable** del
+   proyecto (*Project Settings → API*; nunca la `service_role`) en
+   [`.env.production`](.env.production). Vite lo lee solo al compilar para
+   producción, así que el deploy sale en modo compartido y `bun run dev` sigue
+   en modo local sin tocar la base real. Para volver al modo local, borrar esas
+   dos líneas.
 
 Para cambiar el PIN: *Authentication → Users → el usuario → Reset password*.
 Los celulares que ya entraron siguen conectados hasta que su sesión venza;
 después piden el PIN nuevo.
 
-Para correrlo en local: `VITE_SUPABASE_URL=… VITE_SUPABASE_ANON_KEY=… bun run dev`.
+Para probar el modo compartido en desarrollo: `bun run dev --mode production`
+(usa la base real) o `VITE_SUPABASE_URL=… VITE_SUPABASE_ANON_KEY=… bun run dev`.
 
 ### Pruebas
 

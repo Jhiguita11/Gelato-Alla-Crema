@@ -6,8 +6,8 @@
  * (ver supabase/migrations): solo el usuario del local, que entra con el PIN,
  * puede leer o escribir. NUNCA poner aquí la clave service_role.
  *
- * Si están vacías, la app funciona en modo local (cada celular por su lado),
- * como antes.
+ * Vienen de .env.production (solo en el build de producción). Si están
+ * vacías, la app funciona en modo local (cada celular por su lado), como antes.
  */
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? ''
 export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
