@@ -20,10 +20,15 @@ import {
  */
 export default function Caja() {
   const { orders, cierres, cerrarCaja, importarCierres } = useOrders()
-  const { turnos, reiniciarTurnos } = useTurnos()
-  const [ultimoCierre, setUltimoCierre] = useState(null)
+  const { turnos } = useTurnos()
+  // Se guardan ids y no copias: el cierre sale del historial. En modo
+  // compartido, si el servidor rechaza el cierre (otro celular cerró primero),
+  // desaparece del historial y con él el aviso y el documento.
+  const [ultimoCierreId, setUltimoCierreId] = useState(null)
   // Cierre que se está viendo como documento imprimible.
-  const [comprobante, setComprobante] = useState(null)
+  const [comprobanteId, setComprobanteId] = useState(null)
+  const ultimoCierre = cierres.find((c) => c.id === ultimoCierreId) ?? null
+  const comprobante = cierres.find((c) => c.id === comprobanteId) ?? null
 
   const r = useMemo(() => resumenDelDia(orders, turnos), [orders, turnos])
   const hayMovimiento = orders.length > 0
@@ -54,10 +59,10 @@ export default function Caja() {
     )
     if (!confirmado) return
 
+    // Archiva el día, reinicia la numeración y los turnos de quien siga conectado.
     const cierre = cerrarCaja(r)
-    reiniciarTurnos()
-    setUltimoCierre(cierre)
-    setComprobante(cierre) // el documento del día sale de una
+    setUltimoCierreId(cierre.id)
+    setComprobanteId(cierre.id) // el documento del día sale de una
   }
 
   return (
@@ -89,7 +94,7 @@ export default function Caja() {
           </p>
           <button
             type="button"
-            onClick={() => setComprobante(ultimoCierre)}
+            onClick={() => setComprobanteId(ultimoCierre.id)}
             className="rounded-xl bg-menta-700 px-4 py-2 text-sm font-bold text-crema-50 transition hover:bg-menta-800"
           >
             Ver documento
@@ -192,12 +197,12 @@ export default function Caja() {
         </section>
       )}
 
-      {cierres.length > 0 && <Historial cierres={cierres} onVerDocumento={setComprobante} />}
+      {cierres.length > 0 && <Historial cierres={cierres} onVerDocumento={(c) => setComprobanteId(c.id)} />}
 
       <Respaldo cierres={cierres} onImportar={importarCierres} />
 
       {comprobante && (
-        <ComprobanteCierre cierre={comprobante} onCerrar={() => setComprobante(null)} />
+        <ComprobanteCierre cierre={comprobante} onCerrar={() => setComprobanteId(null)} />
       )}
     </div>
   )

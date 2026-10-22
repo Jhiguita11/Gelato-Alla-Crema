@@ -1,5 +1,5 @@
 import { ADICIONES_EXTRA, PRODUCTS, lineTotal, varianteDe } from '../data/menu'
-import { catalogoSabores } from '../store/disponibilidad'
+import { catalogoSabores } from './catalogo'
 
 /**
  * Sabores de UNA unidad de la línea: los del producto más los de las

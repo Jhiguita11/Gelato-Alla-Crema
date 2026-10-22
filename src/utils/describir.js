@@ -1,5 +1,5 @@
 import { ADICIONES_EXTRA, PRODUCTS, SAUCES, varianteDe } from '../data/menu'
-import { catalogoSabores } from '../store/disponibilidad'
+import { catalogoSabores } from './catalogo'
 
 const nombre = (lista, id) => lista.find((x) => x.id === id)?.name ?? id
 
