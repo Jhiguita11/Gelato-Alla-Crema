@@ -12,8 +12,8 @@
  *   terracota → lo que se agota, se quita o se borra
  */
 @theme {
-  --font-display: 'Fraunces', Georgia, serif;
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Fraunces Variable', 'Fraunces', Georgia, serif;
+  --font-sans: 'Inter Variable', 'Inter', system-ui, sans-serif;
 
   /* El fondo va crema tibio, no blanco: así las tarjetas blancas se despegan
      y los bordes se ven sin tener que oscurecerlos de más. */

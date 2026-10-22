@@ -6,8 +6,9 @@ despachó y qué falta, por mesa. La carta está transcrita de las fotos en
 
 **En vivo:** https://jhiguita11.github.io/Gelato-Alla-Crema/
 
-Conviene abrirla en el celular y usar *Añadir a pantalla de inicio*: queda como
-una app y arranca a pantalla completa.
+Conviene abrirla en el celular e **instalarla** (*Instalar app* en Android,
+*Compartir → Añadir a pantalla de inicio* en iPhone): queda como una app,
+arranca a pantalla completa y **abre aunque no haya internet**.
 
 ## Cómo correrla
 
@@ -15,13 +16,15 @@ una app y arranca a pantalla completa.
 bun install
 bun run dev      # http://localhost:5173
 bun run build    # genera dist/ listo para publicar
+bun run test     # pruebas de precios, caja y respaldo
 ```
 
 ## Cómo se publica
 
 Cada `push` a `main` dispara
-[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), que compila y
-publica en GitHub Pages. No hay que subir `dist/` a mano.
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), que corre las
+pruebas, compila y publica en GitHub Pages. Si una prueba falla, no se publica
+y la app en vivo sigue con la versión anterior. No hay que subir `dist/` a mano.
 
 Como el sitio vive en una subcarpeta (`/Gelato-Alla-Crema/`), `vite.config.js`
 saca la ruta base del nombre del repo que expone Actions — si el repo se
@@ -115,6 +118,13 @@ El PDF lo genera el propio navegador, sin librerías ni servidor: pesa poco,
 funciona sin internet y el texto queda seleccionable. Antes de cerrar avisa si quedan pedidos sin despachar o sin
 cobrar, y hay que confirmar — nunca cierra de una. Los cierres anteriores
 quedan guardados y se pueden abrir para ver cómo fue cada día.
+
+**Copia de seguridad** — El historial de cierres vive solo en el navegador del
+equipo donde se cerró la caja. Al final de Caja están **Descargar respaldo**
+(un `.json` para volver a cargar), **Descargar para Excel** (un `.csv`, un
+renglón por día) y **Cargar respaldo…** para restaurarlo en otro celular o
+después de borrar los datos. Cargar el mismo respaldo dos veces no duplica
+nada.
 
 ## Precios del helado
 
@@ -229,3 +239,28 @@ significa que:
   necesita.
 
 Stack: React 19 + Vite + Tailwind CSS 4, con bun.
+
+## Cómo se guardan los datos
+
+Todo queda en el `localStorage` del navegador (claves `gac.*`), sin servidor.
+
+- **Varias pestañas del mismo equipo** se mantienen al día solas: cada cambio
+  parte de lo último guardado y no de la copia que tiene cada pestaña en
+  memoria, así que una no le borra a la otra un pedido o un cierre de caja
+  ([`src/store/almacen.js`](src/store/almacen.js)).
+- **Celulares distintos NO se ven entre sí.** Cada uno tiene su propia lista de
+  pedidos, su numeración y su caja. Para que la cocina y los meseros compartan
+  los pedidos hace falta un backend.
+
+## App instalable y sin internet
+
+[`vite-plugin-pwa`](https://vite-pwa-org.netlify.app/) genera el manifest y un
+service worker que guarda la app en el celular la primera vez que se abre con
+conexión. Las fuentes (Inter y Fraunces) van dentro de la app, no se piden a
+Google.
+
+Cuando se publica una versión nueva, la app **no se recarga sola** (se perdería
+el pedido que se esté armando): sale un aviso con el botón **Actualizar**.
+
+Los íconos salen del logo con `bun scripts/iconos.mjs` y quedan en
+`public/icons/`. Solo hay que volver a correrlo si cambia el logo.
