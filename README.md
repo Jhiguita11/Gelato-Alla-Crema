@@ -119,8 +119,9 @@ funciona sin internet y el texto queda seleccionable. Antes de cerrar avisa si q
 cobrar, y hay que confirmar — nunca cierra de una. Los cierres anteriores
 quedan guardados y se pueden abrir para ver cómo fue cada día.
 
-**Copia de seguridad** — El historial de cierres vive solo en el navegador del
-equipo donde se cerró la caja. Al final de Caja están **Descargar respaldo**
+**Copia de seguridad** — En modo local el historial de cierres vive solo en el
+navegador del equipo donde se cerró la caja (en modo compartido queda en el
+servidor, pero el respaldo sirve igual). Al final de Caja están **Descargar respaldo**
 (un `.json` para volver a cargar), **Descargar para Excel** (un `.csv`, un
 renglón por día) y **Cargar respaldo…** para restaurarlo en otro celular o
 después de borrar los datos. Cargar el mismo respaldo dos veces no duplica
@@ -242,15 +243,77 @@ Stack: React 19 + Vite + Tailwind CSS 4, con bun.
 
 ## Cómo se guardan los datos
 
-Todo queda en el `localStorage` del navegador (claves `gac.*`), sin servidor.
+La app tiene dos modos, y el cambio entre uno y otro es solo de configuración:
 
-- **Varias pestañas del mismo equipo** se mantienen al día solas: cada cambio
-  parte de lo último guardado y no de la copia que tiene cada pestaña en
-  memoria, así que una no le borra a la otra un pedido o un cierre de caja
-  ([`src/store/almacen.js`](src/store/almacen.js)).
-- **Celulares distintos NO se ven entre sí.** Cada uno tiene su propia lista de
-  pedidos, su numeración y su caja. Para que la cocina y los meseros compartan
-  los pedidos hace falta un backend.
+| | Modo local | Modo compartido |
+| --- | --- | --- |
+| Dónde viven los pedidos | En el navegador de cada equipo | En Supabase, compartidos |
+| ¿La cocina ve lo que toma el mesero? | Solo si es el mismo equipo | **Sí, en todos los celulares, en ~1 s** |
+| Numeración (#001…) | Una por equipo | **Una sola, la pone el servidor** |
+| Caja | Una por equipo | **Una para todo el local** |
+| Sin internet | Funciona | Funciona: los pedidos quedan "por enviar" y se suben solos |
+| Para entrar | Nada | PIN del local, una vez por celular |
+
+Sin configurar Supabase la app arranca en **modo local**, como siempre.
+
+### Cómo funciona por dentro
+
+Todas las acciones (tomar un pedido, cobrar, cerrar caja…) son operaciones de
+un mismo reducer puro, [`src/sync/estado.js`](src/sync/estado.js). Los dos
+modos lo usan:
+
+- **Local** ([`motorLocal.js`](src/sync/motorLocal.js)): aplica la operación
+  sobre lo último guardado en `localStorage` (claves `gac.*`, el mismo formato
+  de siempre) y avisa a las otras pestañas del equipo.
+- **Compartido** ([`motorRemoto.js`](src/sync/motorRemoto.js)): lo que se ve es
+  *el último estado del servidor + la cola de lo que falta subir*. Cada acción
+  se aplica de una en pantalla y entra en una cola guardada en el celular, que
+  se sube en orden ([`remoto.js`](src/sync/remoto.js)). Sin internet la cola
+  espera y se reintenta sola. Los cambios de otros celulares llegan por tiempo
+  real de Supabase.
+
+Lo que tiene que ser atómico lo hace la base de datos
+([`supabase/migrations`](supabase/migrations)): el número de pedido (dos
+celulares nunca reciben el mismo), el cierre de caja (si otro celular ya cerró,
+o llegó un pedido mientras tanto, se rechaza con un aviso) y prender o apagar
+sabores. Todas las operaciones son idempotentes: la cola puede reintentar sin
+duplicar nada.
+
+### Activar el modo compartido
+
+1. **Proyecto**: crear un proyecto en [supabase.com](https://supabase.com)
+   (plan gratis) y correr
+   [`supabase/migrations/20261022000000_pedidos_compartidos.sql`](supabase/migrations/20261022000000_pedidos_compartidos.sql)
+   en *SQL Editor*.
+2. **Usuario del local**: en *Authentication → Users → Add user*, crear
+   `local@gelatoallacrema.app` con el **PIN como contraseña** (mínimo 6
+   dígitos) y marcar *Auto Confirm User*. Ese PIN es el que se pone en cada
+   celular.
+3. **Cerrar registros**: en *Authentication → Sign In / Providers*, desactivar
+   *Allow new users to sign up*. (Aunque alguien lograra crear otra cuenta, las
+   reglas de la base solo dejan entrar al email del local.)
+4. **Conectar la app**: en GitHub, *Settings → Secrets and variables → Actions
+   → Variables*, crear `SUPABASE_URL` y `SUPABASE_ANON_KEY` con los valores de
+   *Project Settings → API* (la clave **anon / publishable**, nunca la
+   `service_role`). Volver a correr el deploy (*Actions → Publicar en GitHub
+   Pages → Run workflow*).
+
+Para cambiar el PIN: *Authentication → Users → el usuario → Reset password*.
+Los celulares que ya entraron siguen conectados hasta que su sesión venza;
+después piden el PIN nuevo.
+
+Para correrlo en local: `VITE_SUPABASE_URL=… VITE_SUPABASE_ANON_KEY=… bun run dev`.
+
+### Pruebas
+
+- `bun run test`: reducer, modo local (compatibilidad con los datos ya
+  guardados), cola y conversión de datos, precios, caja y respaldo.
+- `scripts/probar-servidor.sh`: levanta un Postgres desechable con la
+  migración y PostgREST adelante, y corre
+  [`src/__tests__/integracion.test.js`](src/__tests__/integracion.test.js), que
+  ejecuta cada operación contra el servidor y verifica que el resultado sea el
+  mismo que predice el reducer. Necesita Postgres y el binario de
+  [PostgREST](https://github.com/PostgREST/postgrest/releases).
 
 ## App instalable y sin internet
 

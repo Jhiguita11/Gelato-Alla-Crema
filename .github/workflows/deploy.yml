@@ -30,7 +30,14 @@ jobs:
       # Si un test falla no se publica: la app en vivo sigue con la versión anterior.
       - run: bun run test
 
+      # Con estas dos variables del repo la app sale en modo compartido (todos
+      # los celulares ven los mismos pedidos). Sin ellas, modo local, como antes.
+      # Se configuran en Settings → Secrets and variables → Actions → Variables.
+      # Son públicas a propósito (van dentro de la app); NUNCA la service_role.
       - run: bun run build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
 
       - uses: actions/configure-pages@v5
 
