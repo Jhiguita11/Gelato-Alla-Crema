@@ -88,7 +88,9 @@ export function AvisosListos() {
     anteriores.current = orders
     if (!listos.length) return
     sonarPedidoListo()
-    navigator.vibrate?.([200, 100, 200, 100, 400])
+    // El navegador solo deja vibrar si ya se tocó la pantalla (si no, se queja
+    // en la consola y no vibra igual).
+    if (navigator.userActivation?.hasBeenActive ?? true) navigator.vibrate?.([200, 100, 200, 100, 400])
     listos.forEach(notificarSistema)
     setAvisos((a) => [...a.filter((x) => !listos.some((l) => l.id === x)), ...listos.map((l) => l.id)])
   }, [orders, persona])

@@ -44,6 +44,9 @@ function delDia(e) {
         oculto: Boolean(p.oculto),
         anulado: Boolean(p.anuladoAt),
         anuladoPor: p.anuladoPor ?? null,
+        abonado: p.abonado ?? null,
+        rondaAt: p.rondaAt ?? null,
+        rondaPor: p.rondaPor ?? null,
       }))
       .sort((a, b) => a.code.localeCompare(b.code)),
     turnos: e.turnos.map((t) => ({ persona: t.persona, cerrado: t.fin !== null })),
@@ -125,6 +128,46 @@ describir('servidor compartido (PostgREST + migraciones)', () => {
     expect(real.pedidos).toHaveLength(3)
     expect(real.pedidos.find((p) => p.id === p1.id).oculto).toBe(true)
     expect(real.pedidos.find((p) => p.id === p3.id)).toMatchObject({ anuladoPor: 'Gloria' })
+  })
+
+  it('las mismas personas agregan a su pedido: servidor = reducer (tachado, reabierto, cobro)', async () => {
+    const ronda = (uid, at, extra = {}) => ({
+      uid,
+      productId: 'jugo',
+      quantity: 1,
+      precio: 6000,
+      nombre: 'Jugo',
+      agregadaAt: at,
+      ...extra,
+    })
+    // p1: entregado, pagado y "limpiado" → vuelve a la lista, debe solo lo nuevo.
+    const at1 = Date.now()
+    const op1 = { tipo: 'agregarAPedido', id: p1.id, lineas: [ronda(crypto.randomUUID(), at1)], monto: 6000, pagado: false, at: at1, por: 'Fredy' }
+    await hacer(op1)
+    await hacer(op1) // reintento de la cola
+    let real = await coincide()
+    const r1 = real.pedidos.find((p) => p.id === p1.id)
+    expect(r1).toMatchObject({ status: 'pendiente', oculto: false, total: 13000, paid: false, abonado: 7000, rondaPor: 'Fredy' })
+    expect(r1.lines[0].entregadaAt).toEqual(expect.any(Number))
+    expect(r1.lines[1].entregadaAt).toBeUndefined()
+
+    // p2: pagado y en preparación; lo pasan a listo y piden más, pagando de una.
+    await hacer({ tipo: 'marcarListo', id: p2.id, at: Date.now() })
+    const at2 = Date.now()
+    await hacer({ tipo: 'agregarAPedido', id: p2.id, lineas: [ronda(crypto.randomUUID(), at2, { quantity: 2 })], monto: 12000, pagado: true, at: at2, por: 'Mariana' })
+    real = await coincide()
+    const r2 = real.pedidos.find((p) => p.id === p2.id)
+    expect(r2).toMatchObject({ status: 'pendiente', total: 19000, paid: true, abonado: null })
+    expect(r2.lines[0].listaAt).toEqual(expect.any(Number))
+
+    // Cobrar lo que falta del p1 olvida el abonado.
+    await hacer({ tipo: 'marcarPago', id: p1.id, paid: true, at: Date.now() })
+    real = await coincide()
+    expect(real.pedidos.find((p) => p.id === p1.id)).toMatchObject({ paid: true, abonado: null })
+
+    // A un anulado no se le agrega nada.
+    await hacer({ tipo: 'agregarAPedido', id: p3.id, lineas: [ronda(crypto.randomUUID(), Date.now())], monto: 6000, pagado: false, at: Date.now(), por: 'Fredy' })
+    await coincide()
   })
 
   it('turnos y vitrina', async () => {

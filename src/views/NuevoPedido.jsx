@@ -11,10 +11,10 @@ import {
 import { useDisponibilidad } from '../store/disponibilidad'
 import { useOrders } from '../store/orders'
 import { useTurnos } from '../store/turnos'
-import { describirLinea } from '../utils/describir'
+import { describirLinea, hora } from '../utils/describir'
 
 export default function NuevoPedido({ onEnviado }) {
-  const { addOrder } = useOrders()
+  const { addOrder, agregarAPedido, pedidosDeLaMesa } = useOrders()
   const { productoAgotado, productos } = useDisponibilidad()
   const { persona } = useTurnos()
 
@@ -26,6 +26,9 @@ export default function NuevoPedido({ onEnviado }) {
   const [nota, setNota] = useState('')
   const [carritoAbierto, setCarritoAbierto] = useState(false)
   const [error, setError] = useState('')
+  // Pedidos que ya tiene la mesa: antes de enviar se pregunta si es la misma
+  // personas (se agrega a su pedido) u otras personas (pedido aparte).
+  const [preguntaMesa, setPreguntaMesa] = useState(null)
 
   const total = orderTotal({ lines: lineas })
   const unidades = lineas.reduce((n, l) => n + (l.quantity ?? 1), 0)
@@ -46,7 +49,27 @@ export default function NuevoPedido({ onEnviado }) {
       setCarritoAbierto(true)
       return
     }
+    const abiertos = pedidosDeLaMesa(mesa)
+    if (abiertos.length > 0) {
+      setCarritoAbierto(false)
+      setPreguntaMesa(abiertos)
+      return
+    }
+    enviarComoNuevo()
+  }
+
+  function enviarComoNuevo() {
     const pedido = addOrder({ table: mesa, lines: lineas, note: nota, customer: nombre, takenBy: persona, paid: pagado })
+    terminar(pedido, false)
+  }
+
+  function agregarAlExistente(id) {
+    const pedido = agregarAPedido(id, { lines: lineas, takenBy: persona, paid: pagado, note: nota })
+    terminar(pedido, true)
+  }
+
+  function terminar(pedido, agregado) {
+    setPreguntaMesa(null)
     setLineas([])
     setMesa(null)
     setNombre('')
@@ -54,7 +77,7 @@ export default function NuevoPedido({ onEnviado }) {
     setNota('')
     setError('')
     setCarritoAbierto(false)
-    onEnviado?.(pedido)
+    onEnviado?.(pedido, { agregado })
   }
 
   return (
@@ -174,6 +197,17 @@ export default function NuevoPedido({ onEnviado }) {
           <span className="font-display text-lg font-bold">{formatCOP(total)}</span>
         </button>
       </div>
+
+      {preguntaMesa && (
+        <PreguntaMismasPersonas
+          mesa={mesa}
+          pedidos={preguntaMesa}
+          totalNuevo={total}
+          onAgregar={agregarAlExistente}
+          onNuevo={enviarComoNuevo}
+          onCancelar={() => setPreguntaMesa(null)}
+        />
+      )}
 
       {carritoAbierto && (
         <div
@@ -413,5 +447,89 @@ export function DetalleLinea({ d, className = '' }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+/**
+ * La mesa ya tiene pedido: ¿son las mismas personas pidiendo algo más (se
+ * agrega a su cuenta) u otras personas que se sentaron (pedido aparte)?
+ */
+function PreguntaMismasPersonas({ mesa, pedidos, totalNuevo, onAgregar, onNuevo, onCancelar }) {
+  const estado = (p) =>
+    p.status === 'despachado' ? 'Entregado' : p.status === 'listo' ? 'Listo para recoger' : 'En preparación'
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-cacao-900/50 backdrop-blur-sm sm:items-center sm:p-6">
+      <div
+        role="dialog"
+        aria-labelledby="pregunta-mesa"
+        className="animar-entrada w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
+      >
+        <div className="px-5 pb-2 pt-5">
+          <p className="text-sm font-semibold uppercase tracking-wide text-cono-600">Mesa {mesa}</p>
+          <h3 id="pregunta-mesa" className="mt-1 font-display text-2xl font-bold leading-tight text-cacao-900">
+            Esta mesa ya tiene pedido. ¿Son las mismas personas?
+          </h3>
+          <p className="mt-2 text-sm text-cacao-800/60">
+            Si son las mismas personas, lo nuevo ({formatCOP(totalNuevo)}) se suma a su cuenta y el pedido vuelve a
+            cocina. Lo que ya se entregó queda tachado.
+          </p>
+        </div>
+
+        <div className="space-y-2 px-5 py-3">
+          {pedidos.map((p) => {
+            const debe = p.paid ? 0 : p.total - (p.abonado ?? 0)
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onAgregar(p.id)}
+                className="flex w-full items-center gap-3 rounded-2xl border-2 border-menta-500 bg-menta-100/60 px-4 py-3.5 text-left transition hover:bg-menta-100"
+              >
+                <span className="text-2xl" aria-hidden="true">
+                  ➕
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-base font-bold text-cacao-900">
+                    Sí, agregar al {p.code ? `#${p.code}` : 'pedido'}
+                  </span>
+                  <span className="block truncate text-xs text-cacao-800/60">
+                    {[p.customer, p.takenBy, hora(p.rondaAt ?? p.createdAt), estado(p)].filter(Boolean).join(' · ')}
+                  </span>
+                </span>
+                <span className="shrink-0 text-right text-xs font-semibold text-cacao-800/70">
+                  {formatCOP(p.total)}
+                  <span className={`block ${debe > 0 ? 'text-terracota-600' : 'text-menta-700'}`}>
+                    {debe > 0 ? `debe ${formatCOP(debe)}` : 'pagado'}
+                  </span>
+                </span>
+              </button>
+            )
+          })}
+          <button
+            type="button"
+            onClick={onNuevo}
+            className="flex w-full items-center gap-3 rounded-2xl border-2 border-crema-200 px-4 py-3.5 text-left transition hover:border-cono-500"
+          >
+            <span className="text-2xl" aria-hidden="true">
+              🧾
+            </span>
+            <span>
+              <span className="block text-base font-bold text-cacao-900">No, son otras personas</span>
+              <span className="block text-xs text-cacao-800/60">Pedido aparte, con su propia cuenta</span>
+            </span>
+          </button>
+        </div>
+
+        <div className="px-5 pb-5 pt-1">
+          <button
+            type="button"
+            onClick={onCancelar}
+            className="w-full rounded-2xl py-2.5 text-sm font-semibold text-cacao-800/55 transition hover:text-cacao-900"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

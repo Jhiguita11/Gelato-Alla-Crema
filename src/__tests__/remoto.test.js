@@ -28,6 +28,9 @@ describe('conversión de filas', () => {
       oculto: true,
       anulado_at: '2026-10-22T15:20:00+00:00',
       anulado_por: 'Fredy',
+      abonado: 5000,
+      ronda_at: '2026-10-22T15:30:00+00:00',
+      ronda_por: 'Gloria',
     })
     expect(p).toEqual({
       id: 'a',
@@ -47,6 +50,9 @@ describe('conversión de filas', () => {
       oculto: true,
       anuladoAt: Date.parse('2026-10-22T15:20:00Z'),
       anuladoPor: 'Fredy',
+      abonado: 5000,
+      rondaAt: Date.parse('2026-10-22T15:30:00Z'),
+      rondaPor: 'Gloria',
     })
   })
 

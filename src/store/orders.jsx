@@ -52,6 +52,47 @@ export function OrdersProvider({ children }) {
     [ejecutar],
   )
 
+  /**
+   * Las mismas personas de la mesa pide algo más: lo agrega a su pedido (ver
+   * 'agregarAPedido' en sync/estado.js). Devuelve el pedido actualizado.
+   */
+  const agregarAPedido = useCallback(
+    (id, { lines, takenBy, paid = false, note = '' }) => {
+      const at = Date.now()
+      // Cada línea nueva lleva la hora de la ronda: así la tarjeta sabe qué es
+      // lo recién agregado. uid nuevo por si la línea venía de otro lado.
+      const lineas = lines.map((l) => congelarLinea({ ...l, uid: l.uid ?? crypto.randomUUID(), agregadaAt: at }))
+      const despues = ejecutar({
+        tipo: 'agregarAPedido',
+        id,
+        lineas,
+        monto: orderTotal({ lines: lineas }),
+        pagado: paid,
+        at,
+        por: takenBy ?? null,
+        nota: note.trim(),
+      })
+      return despues.pedidos.find((p) => p.id === id)
+    },
+    [ejecutar],
+  )
+
+  /**
+   * Pedidos de la jornada a los que se podría agregar algo para esta mesa:
+   * los no anulados de esa mesa, el más reciente primero (máximo 3). "Para
+   * llevar" siempre es un pedido aparte.
+   */
+  const pedidosDeLaMesa = useCallback(
+    (mesa) => {
+      if (!mesa || mesa === 'Para llevar') return []
+      return orders
+        .filter((o) => o.table === mesa)
+        .sort((a, b) => (b.rondaAt ?? b.createdAt) - (a.rondaAt ?? a.createdAt))
+        .slice(0, 3)
+    },
+    [orders],
+  )
+
   /** Alterna entre pagado y pendiente de pago. */
   const togglePaid = useCallback(
     (id) => {
@@ -129,6 +170,8 @@ export function OrdersProvider({ children }) {
       cerrarCaja,
       importarCierres,
       addOrder,
+      agregarAPedido,
+      pedidosDeLaMesa,
       dispatchOrder,
       reopenOrder,
       markReady,
@@ -143,6 +186,8 @@ export function OrdersProvider({ children }) {
       cerrarCaja,
       importarCierres,
       addOrder,
+      agregarAPedido,
+      pedidosDeLaMesa,
       dispatchOrder,
       reopenOrder,
       markReady,

@@ -68,10 +68,54 @@ export function aplicarOp(estado, op, { asignarCodigo = true } = {}) {
       }
     }
 
+    // Pagado = todo cobrado; sin pagar = nada cobrado. En los dos casos se
+    // olvida lo abonado (ver agregarAPedido).
     case 'marcarPago':
       return cambiarPedido(estado, op.id, (p) =>
-        p.paid === op.paid ? p : { ...p, paid: op.paid, paidAt: op.paid ? op.at : null },
+        p.paid === op.paid && !p.abonado
+          ? p
+          : { ...p, paid: op.paid, paidAt: op.paid ? op.at : null, abonado: null },
       )
+
+    // Las mismas personas de la mesa pide algo más: se agrega al pedido que ya
+    // tienen en vez de abrir otro.
+    //  · Lo que ya se entregó queda marcado (entregadaAt) para tacharlo; lo
+    //    que estaba listo sin entregar, como lista (listaAt).
+    //  · El pedido vuelve a preparación y a la cola, con la hora de esta ronda.
+    //  · El cobro se recalcula: lo que ya pagaron queda como abonado y lo
+    //    nuevo se suma a lo que deben (o a lo pagado, si lo pagan de una).
+    // El servidor hace exactamente lo mismo en agregar_al_pedido().
+    case 'agregarAPedido':
+      return cambiarPedido(estado, op.id, (p) => {
+        if (p.anuladoAt || op.lineas.length === 0) return p
+        if (p.lines.some((l) => l.uid === op.lineas[0].uid)) return p // reintento
+        const lineasPrevias =
+          p.status === 'despachado'
+            ? p.lines.map((l) => (l.entregadaAt ? l : { ...l, entregadaAt: p.dispatchedAt ?? op.at }))
+            : p.status === 'listo'
+              ? p.lines.map((l) => (l.entregadaAt || l.listaAt ? l : { ...l, listaAt: p.listoAt ?? op.at }))
+              : p.lines
+        const yaPagado = p.paid ? p.total : (p.abonado ?? 0)
+        const total = p.total + op.monto
+        const abonado = yaPagado + (op.pagado ? op.monto : 0)
+        const paid = abonado >= total
+        return {
+          ...p,
+          lines: [...lineasPrevias, ...op.lineas],
+          // La nota de la ronda nueva se suma a la que ya tenía.
+          note: [p.note, op.nota].filter(Boolean).join(' · '),
+          total,
+          status: 'pendiente',
+          listoAt: null,
+          dispatchedAt: null,
+          oculto: false,
+          rondaAt: op.at,
+          rondaPor: op.por ?? null,
+          paid,
+          paidAt: paid ? (p.paidAt ?? op.at) : null,
+          abonado: paid || abonado === 0 ? null : abonado,
+        }
+      })
 
     // Flujo de un pedido: pendiente (en preparación) → listo (para recoger)
     // → despachado (entregado en la mesa).
